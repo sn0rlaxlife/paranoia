@@ -10,6 +10,9 @@ type ControlCheckResult struct {
 	Message     string
 }
 
+var results []ControlCheckResult
+var isCompliant bool
+
 func CheckRBACSettings(clientset *kubernetes.Clientset) []ControlCheckResult {
 	// Logic to check RBAC settings
 	// Involve listing roles, rolebindings, clusterroles, clusterrolebindings

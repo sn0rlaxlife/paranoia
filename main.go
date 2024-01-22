@@ -6,9 +6,10 @@ import (
 
 	watcher "kspm/pkg/k8s"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // main is the entry point of the program.
@@ -19,8 +20,10 @@ func main() {
 		Short: "Start watching Kubernetes resources",
 		Long:  `Starts the Kubernetes watcher to monitor resources.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			color.Green("Starting Kubernetes watcher...")
 			// Initialize Kubernetes client
-			config, err := rest.InClusterConfig()
+			kubeconfig := os.Getenv("KUBECONFIG")
+			config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error creating in-cluster config: %v\n", err)
 				os.Exit(1)

@@ -1,14 +1,47 @@
 package kubernetes
 
 import (
+	"context"
 	"fmt"
-
+    controlchecks "kspm/pkg/controlchecks"
+	"github.com/fatih/color"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
+
+func RBACSettings(clientset *kubernetes.Clientset) []ControlCheckResult {
+	// Initialize the result slice
+	results := []ControlCheckResult{}
+
+	// List roles
+	roles, err := clientset.RbacV1().Roles("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		// Handle error
+	}
+
+	// Check roles and add results
+	for _, role := range roles.Items {
+		// Check role against control requirements
+		isCompliant := checkRole(role)
+		ControlCheckResult := {
+			IsCompliant: isCompliant,
+		}
+		results = append(results, result)
+	}
+
+	// Do the same for rolebindings, clusterroles, clusterrolebindings...
+
+	return results
+}
+
+func checkRole(role rbacv1.Role) bool {
+	// Implement your control requirements here
+	return true
+}
 
 // WatchPods sets up a watch on Pod resources in the cluster
 func WatchPods(clientset *kubernetes.Clientset) {
@@ -45,7 +78,8 @@ func CheckPodSecurity(pod *corev1.Pod) {
 	// Example security check: Check for privileged containers
 	for _, container := range pod.Spec.Containers {
 		if container.SecurityContext != nil && container.SecurityContext.Privileged != nil && *container.SecurityContext.Privileged {
-			fmt.Printf("Warning: Pod %s in namespace %s has a privileged container\n", pod.Name, pod.Namespace)
+			warning := color.New(color.FgHiRed).PrintfFunc()
+			warning("Warning: Pod %s in namespace %s has a privileged container\n", pod.Name, pod.Namespace)
 		}
 	}
 }
