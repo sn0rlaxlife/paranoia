@@ -1,9 +1,8 @@
 package kubernetes
 
 import (
-	"context"
 	"fmt"
-    controlchecks "kspm/pkg/controlchecks"
+
 	"github.com/fatih/color"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -12,31 +11,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
-
-func RBACSettings(clientset *kubernetes.Clientset) []ControlCheckResult {
-	// Initialize the result slice
-	results := []ControlCheckResult{}
-
-	// List roles
-	roles, err := clientset.RbacV1().Roles("").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		// Handle error
-	}
-
-	// Check roles and add results
-	for _, role := range roles.Items {
-		// Check role against control requirements
-		isCompliant := checkRole(role)
-		ControlCheckResult := {
-			IsCompliant: isCompliant,
-		}
-		results = append(results, result)
-	}
-
-	// Do the same for rolebindings, clusterroles, clusterrolebindings...
-
-	return results
-}
 
 func checkRole(role rbacv1.Role) bool {
 	// Implement your control requirements here
