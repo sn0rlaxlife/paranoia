@@ -110,18 +110,6 @@ func main() {
 		}
 		deploymentCmd.Execute()
 	} else if option == 4 {
-		// Check if the Kubernetes client is initialized
-		if clientset == nil {
-			fmt.Fprintf(os.Stderr, "Error: Kubernetes client is not initialized.\n")
-			return
-		}
-
-		// Check if the security roles and flagged permissions are initialized
-		if securityRoles == nil || flaggedPermissions == nil {
-			color.New(color.FgRed).Println("Error: Security roles and flagged permissions are nil, run check command (2)")
-			return
-		}
-
 		// Fetch the list of roles from the Kubernetes API
 		roleList, err := clientset.RbacV1().Roles("").List(context.Background(), metav1.ListOptions{})
 		if err != nil {
@@ -133,7 +121,7 @@ func main() {
 		var functions []riskposture.Function
 
 		for _, role := range roleList.Items {
-			fmt.Printf("Name: %s, NS: %s, Permissions: %v, Resources: %v\n", role.Name, role.Namespace, role.Rules, role.APIVersion)
+			fmt.Printf("%s, NS: %s, Permissions: %v, Resources: %v\n", role.Name, role.Namespace, role.Rules, role.APIVersion)
 		}
 
 		// Call the NewRBACRoleList function with the roles from roleList

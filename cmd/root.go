@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-
 	"kspm/pkg/entity"
 	watcher "kspm/pkg/k8s"
+	"kspm/pkg/rbac"
+	"kspm/pkg/riskposture"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -115,10 +116,57 @@ var deploymentCmd = &cobra.Command{
 	},
 }
 
+var displayRiskLevelsCmd = &cobra.Command{
+	Use:   "risk-levels",
+	Short: "Display risk levels",
+	Long:  `Displays the risk levels for the checks.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Initialize the functions
+		if kubeconfig == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error getting user home directory: %v\n", err)
+				os.Exit(1)
+			}
+			kubeconfig = filepath.Join(home, ".kube", "config")
+		}
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating Kubernetes client: %v\n", err)
+			os.Exit(1)
+		}
+
+		clienset, err := kubernetes.NewForConfig(config)
+		// Fetch the list of roles from the Kubernetes API
+		roleList, err := clienset.RbacV1().Roles("").List(cmd.Context(), metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating Kubernetes client: %v\n", err)
+			os.Exit(1)
+		}
+		//Call the NewRBACRoleList Function with the roles from rolelist
+		roles, err := rbac.NewRBACRoleList(roleList)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating Kubernetes client: %v\n", err)
+			os.Exit(1)
+		}
+		//Initialize the function
+		var functions [][]riskposture.Function
+		for _, role := range roles {
+			roleFunctions := rbac.ConvertRoleToFunction(role, [][]rbac.PolicyRule{})
+			functions = append(functions, roleFunctions)
+		}
+		// Create a new RiskPosture with the functions
+		riskPostureInstance := riskposture.NewRiskPosture(functions)
+		// Display the risk levels
+		riskPostureInstance.DisplayRiskLevels()
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(deploymentCmd)
+	rootCmd.AddCommand(displayRiskLevelsCmd)
 	// Here you will define your flags and configuration settings.
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
