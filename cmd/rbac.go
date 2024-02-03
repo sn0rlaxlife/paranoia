@@ -50,11 +50,14 @@ func displaySecurityRoles() {
 	}
 
 	// Convert the fetched roles to your custom SecurityRoleList
-	securityRoles := entity.NewSecurityRoleList(roles.Items)
+	securityRoles, flaggedPermissions := entity.NewRBACRoleList(roles.Items)
 
 	// Display the converted roles
-	for _, role := range securityRoles {
-		fmt.Printf("Name: %s, Namespace: %s, Permissions: %v, Resources: %v\n",
+	for i, role := range securityRoles {
+		fmt.Printf("Name: %s, NS: %s, Permissions: %v, Resources: %v\n",
 			role.Name, role.Namespace, role.Permissions, role.Resources)
+		if len(flaggedPermissions[i]) > 0 {
+			fmt.Printf("Flagged Permissions: %v\n", flaggedPermissions[i])
+		}
 	}
 }
