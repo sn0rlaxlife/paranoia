@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"kspm/pkg/entity"
 	watcher "kspm/pkg/k8s"
-	"kspm/pkg/rbac"
 	"kspm/pkg/riskposture"
 	"os"
 	"path/filepath"
@@ -150,10 +149,10 @@ var displayRiskLevelsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		//Initialize the function
-		var functions [][]riskposture.Function
+		var functions []riskposture.Function
 		for _, role := range roles {
 			roleFunctions := rbac.ConvertRoleToFunction(role, [][]rbac.PolicyRule{})
-			functions = append(functions, roleFunctions)
+			functions = append(functions, roleFunctions...)
 		}
 		// Create a new RiskPosture with the functions
 		riskPostureInstance := riskposture.NewRiskPosture(functions)
@@ -167,6 +166,7 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(deploymentCmd)
 	rootCmd.AddCommand(displayRiskLevelsCmd)
+	rootCmd.AddCommand(rbacCmd)
 	// Here you will define your flags and configuration settings.
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:

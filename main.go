@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt" // Adjust this import to match your project's structure
+	"kspm/pkg/entity"
 	rbac "kspm/pkg/entity"
 	watcher "kspm/pkg/k8s"
 	"kspm/pkg/riskposture"
@@ -20,6 +21,7 @@ import (
 var securityRoles []rbac.RBACRoleList
 var flaggedPermissions [][]rbacv1.PolicyRule
 
+// main is the entry point of the program.
 // main is the entry point of the program.
 func main() {
 
@@ -43,6 +45,7 @@ func main() {
 	color.New(color.FgGreen).Println("2. Run control checks")
 	color.New(color.FgYellow).Println("3. Check deployments for violations of no labels")
 	color.New(color.FgRed).Println("4. Display risk levels")
+	color.New(color.FgHiCyan).Println("5. Rbac Analysis")
 	fmt.Print("Enter the number of the option you want to select: ")
 
 	var option int
@@ -121,7 +124,13 @@ func main() {
 		var functions []riskposture.Function
 
 		for _, role := range roleList.Items {
-			fmt.Printf("%s, NS: %s, Permissions: %v, Resources: %v\n", role.Name, role.Namespace, role.Rules, role.APIVersion)
+			cyan := color.New(color.FgCyan).SprintFunc()
+			yellow := color.New(color.FgYellow).SprintFunc()
+			fmt.Printf("%s, NS: %s, Permissions: %v, Resources: %v\n",
+				cyan(role.Name),
+				yellow(role.Namespace),
+				cyan(role.Rules),
+				yellow(role.APIVersion))
 		}
 
 		// Call the NewRBACRoleList function with the roles from roleList
@@ -141,6 +150,99 @@ func main() {
 		riskPostureInstance := riskposture.NewRiskPosture(functions)
 		// Display the risk levels
 		riskPostureInstance.DisplayRiskLevels()
+	} else if option == 5 {
+		// Fetch the list of roles from the Kubernetes API
+		roleList, err := clientset.RbacV1().Roles("").List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to fetch roles: %v\n", err)
+			return
+		}
+
+		// ClusterRoles
+		clusterRoleList, err := clientset.RbacV1().ClusterRoles().List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to fetch ClusterRoles: %v\n", err)
+			return
+		}
+
+		// Convert the clusterRoleList.Items to custom role types
+		clusterRoles, _ := rbac.NewRBACClusterRoleList(clusterRoleList.Items) // Removed err
+
+		// Convert roles and clusterRoles to [][]rbacv1.PolicyRule before passing to PrintExcessPrivileges
+		var policyRules [][]rbacv1.PolicyRule
+		for _, role := range roleList.Items {
+			policyRules = append(policyRules, role.Rules)
+		}
+		for _, clusterRole := range append(clusterRoles, securityRoles...) {
+			// Retrieve the rules from the clusterRole
+			entityRules := clusterRole.Rules
+
+			// Convert entityRules to []rbacv1.PolicyRule
+			var rbacRules []rbacv1.PolicyRule
+			for _, entityRule := range entityRules {
+				rbacRule := rbacv1.PolicyRule{
+					Verbs:     entityRule.Verbs,
+					Resources: entityRule.Resources,
+					// Add other fields as necessary
+				}
+				rbacRules = append(rbacRules, rbacRule)
+			}
+
+			// Append the rules to policyRules
+			policyRules = append(policyRules, rbacRules)
+		}
+
+		// Convert policyRules to [][]entity.PolicyRule
+		var entityPolicyRules [][]entity.PolicyRule
+		for _, rules := range policyRules {
+			var entityRules []entity.PolicyRule
+			for _, rule := range rules {
+				// Convert rbacv1.PolicyRule to entity.PolicyRule
+				entityRule := entity.PolicyRule{
+					APIGroups: rule.APIGroups,
+					Verbs:     rule.Verbs,
+					Resources: rule.Resources,
+					// Add other fields as necessary
+				}
+				entityRules = append(entityRules, entityRule)
+			}
+			entityPolicyRules = append(entityPolicyRules, entityRules)
+		}
+
+		rbac.PrintExcessPrivileges(entityPolicyRules) // Changed rbrbacvertPolicyRules to entityPolicyRules
+		// Display the converted roles
+		var allRoles []rbacv1.Role
+		allRoles = append(allRoles, roleList.Items...)
+		for _, clusterRole := range clusterRoleList.Items {
+			role := rbacv1.Role{
+				ObjectMeta: clusterRole.ObjectMeta,
+				Rules:      clusterRole.Rules,
+			}
+			allRoles = append(allRoles, role)
+		}
+		// ... // Changed rbrbacvertPolicyRules to entityPolicyRules
+		// Display the converted roles
+		rbacCmd := &cobra.Command{
+			Use:   "rbac",
+			Short: "Run RBAC Checks",
+			Long:  `Runs RBAC checks against the cluster.`,
+			Run: func(cmd *cobra.Command, args []string) {
+				color.Green("Running RBAC checks...")
+				// Display the converted roles
+				for _, role := range allRoles {
+					cyan := color.New(color.FgCyan).SprintFunc()
+					yellow := color.New(color.FgYellow).SprintFunc()
+					for _, rule := range role.Rules { // Assuming that your RBACRole has a method GetRules() that returns []rbacv1.PolicyRule
+						fmt.Printf("Name: %s, NS: %s, Permissions: %v, Resources: %v\n",
+							cyan(role.Name),
+							yellow(role.Namespace),
+							cyan(rule.Verbs),
+							yellow(rule.Resources))
+					}
+				}
+			},
+		}
+		rbacCmd.Execute()
 	} else {
 		fmt.Println("Invalid option")
 	}

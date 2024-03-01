@@ -5,9 +5,9 @@ go 1.21.6
 require (
 	github.com/fatih/color v1.16.0
 	github.com/spf13/cobra v1.8.0
-	k8s.io/api v0.29.1
-	k8s.io/apimachinery v0.29.1
-	k8s.io/client-go v0.29.1
+	k8s.io/api v0.29.2
+	k8s.io/apimachinery v0.29.2
+	k8s.io/client-go v0.29.2
 	k8s.io/kubernetes v1.29.1
 )
 
