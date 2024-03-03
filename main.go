@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt" // Adjust this import to match your project's structure
 	"kspm/pkg/entity"
 	rbac "kspm/pkg/entity"
@@ -17,49 +18,52 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// calls securityRoles and flaggedPermissions from entity package
-var securityRoles []rbac.RBACRoleList
-var flaggedPermissions [][]rbacv1.PolicyRule
-
-// main is the entry point of the program.
-// main is the entry point of the program.
-func main() {
-
-	// Initialize the Kubernetes client
+func initClient() (*kubernetes.Clientset, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating in-cluster config: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to build config: %w", err)
 	}
-	clientset, err := kubernetes.NewForConfig(config) // Add missing variable declaration for clientset
+
+	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating Kubernetes client: %v\n", err)
+		return nil, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	return clientset, nil
+}
+
+// calls securityRoles and flaggedPermissions from entity package
+var securityRoles []rbac.RBACRoleList
+
+// main is the entry point of the program.
+func main() {
+
+	// Initialize Kubernetes client
+	clientset, err := initClient()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Define the watchCmd variable
-	color.New(color.BgHiCyan).Println("Starting KSPM...")
-	color.New(color.BgHiRed).Println("Please select an option:")
-	color.New(color.FgBlue).Println("1. Watch Kubernetes resources")
-	color.New(color.FgGreen).Println("2. Run control checks")
-	color.New(color.FgYellow).Println("3. Check deployments for violations of no labels")
-	color.New(color.FgRed).Println("4. Display risk levels")
-	color.New(color.FgHiCyan).Println("5. Rbac Analysis")
-	fmt.Print("Enter the number of the option you want to select: ")
-
-	var option int
-	for {
-		_, err := fmt.Scanf("%d", &option)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		break // Add a break statement to exit the loop after reading user input
-	}
+	// Define the flags
+	var watchFlag *bool
+	var checkFlag *bool
+	var deploymentFlag *bool
+	var riskFlag *bool
+	var rbacFlag *bool
+	// Flag for options
+	watchFlag = flag.Bool("watch", false, "Watch Kubernetes resources")
+	checkFlag = flag.Bool("check", false, "Run control checks")
+	deploymentFlag = flag.Bool("deployment", false, "Check deployments for violations of no labels")
+	riskFlag = flag.Bool("risk", false, "Display risk levels")
+	rbacFlag = flag.Bool("rbac", false, "Rbac Analysis")
+	// Parse the flags
+	flag.Parse()
 
 	// Check the option selected by the user
-	if option == 1 {
+	if *watchFlag {
+		fmt.Println("Starting Kubernetes watcher...........")
 		watchCmd := &cobra.Command{
 			Use:   "watch",
 			Short: "Start watching Kubernetes resources",
@@ -72,7 +76,7 @@ func main() {
 		}
 		watchCmd.Execute()
 		// Execute the watch command
-	} else if option == 2 {
+	} else if *checkFlag {
 		// Define the checkCmd variable
 		checkCmd := &cobra.Command{
 			Use:   "check",
@@ -89,7 +93,7 @@ func main() {
 			},
 		}
 		checkCmd.Execute() // Execute the check command
-	} else if option == 3 {
+	} else if *deploymentFlag {
 		// Define the deploymentCmd variable
 		deploymentCmd := &cobra.Command{
 			Use:   "deployment",
@@ -112,7 +116,7 @@ func main() {
 			},
 		}
 		deploymentCmd.Execute()
-	} else if option == 4 {
+	} else if *rbacFlag {
 		// Fetch the list of roles from the Kubernetes API
 		roleList, err := clientset.RbacV1().Roles("").List(context.Background(), metav1.ListOptions{})
 		if err != nil {
@@ -150,7 +154,7 @@ func main() {
 		riskPostureInstance := riskposture.NewRiskPosture(functions)
 		// Display the risk levels
 		riskPostureInstance.DisplayRiskLevels()
-	} else if option == 5 {
+	} else if *riskFlag {
 		// Fetch the list of roles from the Kubernetes API
 		roleList, err := clientset.RbacV1().Roles("").List(context.Background(), metav1.ListOptions{})
 		if err != nil {
@@ -233,16 +237,28 @@ func main() {
 					cyan := color.New(color.FgCyan).SprintFunc()
 					yellow := color.New(color.FgYellow).SprintFunc()
 					for _, rule := range role.Rules { // Assuming that your RBACRole has a method GetRules() that returns []rbacv1.PolicyRule
+						ns := role.Namespace
+						if ns == "" {
+							ns = "No Namespace - ClusterRole"
+						}
+						var coloredVerbs []string
+						for _, verb := range rule.Verbs {
+							if verb == "create" || verb == "delete" || verb == "update" || verb == "patch" {
+								coloredVerbs = append(coloredVerbs, color.New(color.FgRed).SprintFunc()(verb))
+							} else {
+								coloredVerbs = append(coloredVerbs, verb)
+							}
+						}
 						fmt.Printf("Name: %s, NS: %s, Permissions: %v, Resources: %v\n",
 							cyan(role.Name),
-							yellow(role.Namespace),
-							cyan(rule.Verbs),
+							yellow(ns),
+							coloredVerbs,
 							yellow(rule.Resources))
-					}
-				}
-			},
-		}
-		rbacCmd.Execute()
+					} // Closing brace for the inner for loop
+				} // Closing brace for the outer for loop
+			}, // Closing brace for the Run function
+		} // Closing brace for the rbacCmd definition
+		rbacCmd.Execute() // Move this outside of the for loops
 	} else {
 		fmt.Println("Invalid option")
 	}

@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
 	entity "kspm/pkg/entity"
 )
+
+var visualizeFlag bool
 
 var rbacCmd = &cobra.Command{
 	Use:   "rbac",
@@ -24,19 +24,12 @@ var rbacCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(rbacCmd)
+
 }
 
 func displaySecurityRoles() {
 	// Load the kubeconfig file to connect to the Kubernetes cluster
-	kubeconfig := os.Getenv("KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to build kubeconfig: %v\n", err)
-		return
-	}
-
-	// Create a new clientset for interacting with the Kubernetes cluster
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := initClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create Kubernetes client: %v\n", err)
 		return
@@ -60,4 +53,5 @@ func displaySecurityRoles() {
 			fmt.Printf("Flagged Permissions: %v\n", flaggedPermissions[i])
 		}
 	}
+	// Visualize relationships between roles if the visualize flag is set
 }
