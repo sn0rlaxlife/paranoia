@@ -36,6 +36,15 @@ func WatchPods(clientset *kubernetes.Clientset) {
 				fmt.Printf("New Pod Added: %s in namespace %s\n", pod.Name, pod.Namespace)
 				CheckPodSecurity(pod)
 			},
+			DeleteFunc: func(obj interface{}) {
+				pod := obj.(*corev1.Pod)
+				fmt.Printf("Pod Deleted: %s in namespace %s\n", pod.Name, pod.Namespace)
+			},
+			UpdateFunc: func(_, newObj interface{}) {
+				newPod := newObj.(*corev1.Pod)
+				fmt.Printf("Pod Updated: %s in namespace %s\n", newPod.Name, newPod.Namespace)
+				CheckPodSecurity(newPod)
+			},
 		},
 	)
 
@@ -55,5 +64,20 @@ func CheckPodSecurity(pod *corev1.Pod) {
 			warning := color.New(color.FgHiRed).PrintfFunc()
 			warning("Warning: Pod %s in namespace %s has a privileged container\n", pod.Name, pod.Namespace)
 		}
+	}
+	// Implement more security checks here
+	for _, container := range pod.Spec.Containers {
+		if container.SecurityContext != nil && container.SecurityContext.Capabilities != nil {
+			for _, cap := range container.SecurityContext.Capabilities.Add {
+				if cap == "ALL" || cap == "NET_ADMIN" || cap == "SYS_ADMIN" {
+					warning := color.New(color.FgHiRed).PrintfFunc()
+					warning("Warning: Pod %s in namespace %s has a container with insecure capabilities\n", pod.Name, pod.Namespace)
+				}
+			}
+		}
+	}
+	if pod.Spec.HostNetwork {
+		warning := color.New(color.FgHiRed).PrintfFunc()
+		warning("Warning: Pod %s in namespace %s has host network access\n", pod.Name, pod.Namespace)
 	}
 }
