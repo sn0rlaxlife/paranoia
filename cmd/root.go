@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"kspm/pkg/controlchecks"
 	"kspm/pkg/entity"
 	watcher "kspm/pkg/k8s"
 	"kspm/pkg/riskposture"
@@ -10,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -130,12 +133,47 @@ var displayRiskLevelsCmd = &cobra.Command{
 	},
 }
 
+var reportCmd = &cobra.Command{
+	Use:   "scan",
+	Short: "Scan images for vulnerabilities",
+	Long:  `Scans the images for vulnerabilities.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Flag will be declared here for inputs
+		cfg, err := rest.InClusterConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting Kubernetes config: %v\n", err)
+			os.Exit(1)
+		}
+
+		ctx := context.Background()
+		namespace := cmd.Flag("namespace").Value.String() // Make sure namespace is defined or fetched from flags
+
+		if namespace == "" {
+			fmt.Fprintf(os.Stderr, "Namespace is required\n")
+			os.Exit(1)
+		}
+
+		reports, err := controlchecks.FetchVulnerabilityReports(ctx, cfg, namespace)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error fetching vulnerability reports: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Do something with the reports...
+		fmt.Println("Starting to print reports...")
+		for _, report := range reports {
+			fmt.Printf("Report: %v\n", report)
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(deploymentCmd)
 	rootCmd.AddCommand(displayRiskLevelsCmd)
 	rootCmd.AddCommand(rbacCmd)
+	rootCmd.AddCommand(reportCmd)
 	// Here you will define your flags and configuration settings.
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
