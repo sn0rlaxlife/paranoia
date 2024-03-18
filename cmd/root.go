@@ -61,7 +61,7 @@ var checkCmd = &cobra.Command{
 		}
 
 		// Start the entity Kubernetes watcher
-		entity.RBACRoles(clientset)
+		entity.NewRBACRoleList(clientset)
 	},
 }
 var deploymentCmd = &cobra.Command{

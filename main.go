@@ -7,7 +7,10 @@ import (
 	"kspm/pkg/entity"
 	rbac "kspm/pkg/entity"
 	watcher "kspm/pkg/k8s"
+	"kspm/pkg/reports"
+	"kspm/pkg/trivytypes"
 	"os"
+	"path/filepath"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -17,6 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	// Adjust this import to match your project's structure
 )
 
 func initClient() (*kubernetes.Clientset, error) {
@@ -28,6 +32,9 @@ func initClient() (*kubernetes.Clientset, error) {
 	if err != nil {
 		// If in-cluster configuration does not exist, try to use the local configuration
 		kubeconfig := os.Getenv("KUBECONFIG")
+		if kubeconfig == "" {
+			kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		}
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build config: %w", err)
@@ -208,6 +215,10 @@ func createRbacCmd() *cobra.Command {
 		Short: "Run RBAC Checks",
 		Long:  `Runs RBAC checks against the cluster.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			if !rbacFlag {
+				color.Green("RBAC flag is false............")
+				return
+			}
 			clientset, err := initClient()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
@@ -313,18 +324,19 @@ func createRbacCmd() *cobra.Command {
 		}, // Closing brace for the Run function
 	} // Closing brace for the rbacCmd definition
 	// Add the watch command to the root command
-	rbacCmd.Flags().BoolVarP(&rbacFlag, "rbac", "r", false, "Run RBAC checks")
+	rbacCmd.Flags().BoolVarP(&rbacFlag, "rbac", "b", false, "Run RBAC checks")
 	return rbacCmd
 }
 func reportCmd() *cobra.Command {
 	var namespace string
+	var kubeconfig string
 
 	var reportCmd = &cobra.Command{
 		Use:   "report",
 		Short: "Scan images for vulnerabilities",
 		Long:  `Scans the images for vulnerabilities.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			cfg, err := rest.InClusterConfig()
+			cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error getting Kubernetes config: %v\n", err)
 				os.Exit(1)
@@ -337,21 +349,30 @@ func reportCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			reports, err := controlchecks.FetchVulnerabilityReports(ctx, cfg, namespace)
+			vulnReports, err := controlchecks.FetchVulnerabilityReports(ctx, cfg, namespace)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error fetching vulnerability reports: %v\n", err)
 				os.Exit(1)
 			}
 
-			fmt.Println("Starting to print reports...")
-			for _, report := range reports {
-				fmt.Printf("Report: %v\n", report)
+			var vulns []trivytypes.Vulnerability
+			fmt.Printf("Number of reports: %d\n", len(vulnReports))
+			for _, trivyReport := range vulnReports {
+				for _, trivyVuln := range trivyReport.Report.Vulnerabilities {
+					reportVuln := trivytypes.Vulnerability{
+						VulnerabilityID: trivyVuln.VulnerabilityID,
+						Description:     trivyVuln.Description,
+					}
+					vulns = append(vulns, reportVuln)
+				}
 			}
+			// Call PrintVulnerabilityTable inside the Run function
+			reports.PrintVulnerabilityTable(vulns)
 		},
 	}
 
 	reportCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "The namespace to fetch reports from")
-
+	reportCmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", "", "Path to the kubeconfig file")
 	return reportCmd
 } // Closing brace for the imageScanCmd
 

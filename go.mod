@@ -3,6 +3,7 @@ module kspm
 go 1.21.6
 
 require (
+	github.com/aquasecurity/trivy-db v0.0.0-20240304133434-db9bf07792af
 	github.com/aquasecurity/trivy-operator v0.19.0
 	github.com/fatih/color v1.16.0
 	github.com/spf13/cobra v1.8.0
@@ -21,7 +22,6 @@ require (
 	github.com/aquasecurity/table v1.8.0 // indirect
 	github.com/aquasecurity/tml v0.6.1 // indirect
 	github.com/aquasecurity/trivy v0.49.1 // indirect
-	github.com/aquasecurity/trivy-db v0.0.0-20231020043206-3770774790ce // indirect
 	github.com/aquasecurity/trivy-policies v0.8.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.11.2 // indirect
@@ -58,7 +58,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.26.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
 	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect

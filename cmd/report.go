@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"kspm/pkg/controlchecks"
-	"kspm/pkg/k8s"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -16,8 +17,21 @@ var reportCmd = &cobra.Command{
 	Long:  `This command generates a report of the cluster's security posture.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Initialize Kubernetes client
-		cfg, _ := k8s.InitClient()
-		controlchecks.FetchVulnerabilityReports(context.Context, cfg, namespace)
+		cfg, err := trivyK8s.InitClient()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
+			os.Exit(1)
+		}
+		// Fetch and format vulnerabilities
+		vulnerabilities, err := pkg.reports.FetchAndFormatVulnerabilities(context.Background(), cfg, namespace)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error fetching vulnerabilities: %v\n", err)
+			os.Exit(1)
+		}
+		// Print the vulnerabilities table
+		pkg.reports.PrintVulnerabilityTable(vulnerabilities)
+
+		controlchecks.FetchVulnerabilityReports(context.Background(), cfg, namespace)
 	},
 }
 

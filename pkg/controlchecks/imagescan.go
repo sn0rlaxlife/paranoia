@@ -14,6 +14,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type ReportFilter struct {
+	ImageName string
+	Labels    map[string]string
+}
+
 func init() {
 	// Register the trivy operator types with the global scheme
 	_ = trivyv1alpha.AddToScheme(scheme.Scheme)
@@ -27,12 +32,12 @@ func FetchVulnerabilityReports(ctx context.Context, cfg *rest.Config, namespace 
 	}
 
 	// List all the VulnerabilityReports in the namespace
-	var reports trivyv1alpha.VulnerabilityReportList
-	if err := c.List(ctx, &reports, client.InNamespace(namespace)); err != nil {
+	var reportsList trivyv1alpha.VulnerabilityReportList
+	if err := c.List(ctx, &reportsList, client.InNamespace(namespace)); err != nil {
 		return nil, err
 	}
 
-	return reports.Items, nil
+	return reportsList.Items, nil
 }
 
 func ScanImages(clientset *kubernetes.Clientset, imageFlag string) error {
