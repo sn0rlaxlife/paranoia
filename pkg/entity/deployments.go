@@ -2,6 +2,7 @@ package entity
 
 import (
 	"context"
+	"fmt"
 
 	v1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,4 +50,13 @@ func GetDeploymentList(clientset kubernetes.Interface) (*v1.DeploymentList, erro
 		return nil, err
 	}
 	return deployments, nil
+}
+
+func GetDeploymentsAndViolationCount(clientset *kubernetes.Clientset) ([]Deployment, int, error) {
+	deployments, err := clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, 0, fmt.Errorf("Error fetching deployments: %v", err)
+	}
+	deploymentList, violationCount := NewDeploymentList(deployments)
+	return deploymentList, violationCount, nil
 }

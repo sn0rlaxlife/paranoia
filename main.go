@@ -7,7 +7,10 @@ import (
 	"kspm/pkg/entity"
 	rbac "kspm/pkg/entity"
 	watcher "kspm/pkg/k8s"
+	"kspm/pkg/reports"
+	"kspm/pkg/trivytypes"
 	"os"
+	"path/filepath"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -15,14 +18,27 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	// Adjust this import to match your project's structure
 )
 
 func initClient() (*kubernetes.Clientset, error) {
-	kubeconfig := os.Getenv("KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	var config *rest.Config
+	var err error
+
+	// Try to use the in-cluster configuration (if exists)
+	config, err = rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build config: %w", err)
+		// If in-cluster configuration does not exist, try to use the local configuration
+		kubeconfig := os.Getenv("KUBECONFIG")
+		if kubeconfig == "" {
+			kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		}
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build config: %w", err)
+		}
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -34,11 +50,13 @@ func initClient() (*kubernetes.Clientset, error) {
 }
 
 var (
-	watchFlag      *bool
-	checkFlag      *bool
-	deploymentFlag *bool
-	riskFlag       *bool
-	rbacFlag       *bool
+	watchFlag      bool
+	checkFlag      bool
+	deploymentFlag bool
+	riskFlag       bool
+	rbacFlag       bool
+	imageFlag      string
+	namespace      string
 	rootCmd        = &cobra.Command{
 		Use:   "paranoia",
 		Short: "Paranoia is a tool for monitoring and securing Kubernetes clusters",
@@ -46,14 +64,18 @@ var (
 )
 
 func init() {
-	var rootCmd = &cobra.Command{Use: "paranoia", Short: "Paranoia is a tool for monitoring and securing Kubernetes clusters"}
-	// Define the flags
-	rootCmd.PersistentFlags().BoolP("global", "g", false, "Global flag available for all commands")
+	rootCmd.PersistentFlags().BoolVarP(&watchFlag, "watch", "w", false, "Start watching Kubernetes resources")
+	rootCmd.PersistentFlags().BoolVarP(&checkFlag, "check", "c", false, "Run control checks")
+	rootCmd.PersistentFlags().BoolVarP(&deploymentFlag, "deployment", "d", false, "Run deployment checks")
+	rootCmd.PersistentFlags().BoolVarP(&riskFlag, "risk", "r", false, "Run risk checks")
+	rootCmd.PersistentFlags().BoolVarP(&rbacFlag, "rbac", "b", false, "Run RBAC checks")
+	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "The name of the image to scan")
+
 	rootCmd.AddCommand(createWatchCmd())
 	rootCmd.AddCommand(createCheckCmd())
 	rootCmd.AddCommand(createDeploymentCmd())
 	rootCmd.AddCommand(createRbacCmd())
-	rootCmd.AddCommand(createImageScanCmd())
+	rootCmd.AddCommand(reportCmd())
 }
 
 // Define the watch command in the init to be accessible from the root command
@@ -171,12 +193,11 @@ func createDeploymentCmd() *cobra.Command {
 				os.Exit(1)
 			}
 			color.Green("Running deployment checks...")
-			deployments, err := clientset.AppsV1().Deployments("").List(cmd.Context(), metav1.ListOptions{})
+			deploymentList, violationCount, err := entity.GetDeploymentsAndViolationCount(clientset)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error fetching deployments: %v\n", err)
+				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
 			}
-			deploymentList, violationCount := rbac.NewDeploymentList(deployments)
 			fmt.Printf("Number of deployments with no labels: %d\n", violationCount)
 			for _, deployment := range deploymentList {
 				fmt.Printf("Name: %s, Namespace: %s, Replicas: %d, Labels: %v\n", deployment.Name, deployment.Namespace, deployment.Replicas, deployment.Labels)
@@ -193,6 +214,10 @@ func createRbacCmd() *cobra.Command {
 		Short: "Run RBAC Checks",
 		Long:  `Runs RBAC checks against the cluster.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			if !rbacFlag {
+				color.Green("RBAC flag is false............")
+				return
+			}
 			clientset, err := initClient()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
@@ -298,34 +323,57 @@ func createRbacCmd() *cobra.Command {
 		}, // Closing brace for the Run function
 	} // Closing brace for the rbacCmd definition
 	// Add the watch command to the root command
-	rbacCmd.Flags().BoolVarP(&rbacFlag, "rbac", "r", false, "Run RBAC checks")
+	rbacCmd.Flags().BoolVarP(&rbacFlag, "rbac", "b", false, "Run RBAC checks")
 	return rbacCmd
 }
-func createImageScanCmd() *cobra.Command {
-	var imageFlag string
-	var imageScanCmd = &cobra.Command{
-		Use:   "imagescan",
+func reportCmd() *cobra.Command {
+	var namespace string
+	var kubeconfig string
+
+	var reportCmd = &cobra.Command{
+		Use:   "report",
 		Short: "Scan images for vulnerabilities",
 		Long:  `Scans the images for vulnerabilities.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			if imageFlag == "" {
-				fmt.Fprintf(os.Stderr, "Image flag is required\n")
-				os.Exit(1)
-			}
-
-			clientset, err := initClient()
+			cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error getting Kubernetes config: %v\n", err)
 				os.Exit(1)
 			}
 
-			controlchecks.ScanImages(clientset, imageFlag)
+			ctx := context.Background()
+
+			if namespace == "" {
+				fmt.Fprintf(os.Stderr, "Namespace is required\n")
+				os.Exit(1)
+			}
+
+			vulnReports, err := controlchecks.FetchVulnerabilityReports(ctx, cfg, namespace)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error fetching vulnerability reports: %v\n", err)
+				os.Exit(1)
+			}
+
+			var vulns []trivytypes.Vulnerability
+			fmt.Printf("Number of reports: %d\n", len(vulnReports))
+			for _, trivyReport := range vulnReports {
+				for _, trivyVuln := range trivyReport.Report.Vulnerabilities {
+					reportVuln := trivytypes.Vulnerability{
+						VulnerabilityID: trivyVuln.VulnerabilityID,
+						Description:     trivyVuln.Description,
+					}
+					vulns = append(vulns, reportVuln)
+				}
+			}
+			// Call PrintVulnerabilityTable inside the Run function
+			reports.PrintVulnerabilityTable(vulns)
 		},
 	}
 
-	imageScanCmd.Flags().StringVarP(&imageFlag, "image", "i", "", "The name of the image to scan")
-	return imageScanCmd
-} // Closing brace for the imageScanCmd d
+	reportCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "The namespace to fetch reports from")
+	reportCmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", "", "Path to the kubeconfig file")
+	return reportCmd
+} // Closing brace for the imageScanCmd
 
 // calls securityRoles and flaggedPermissions from entity package
 var securityRoles []rbac.RBACRoleList

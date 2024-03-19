@@ -33,7 +33,8 @@ func WatchPods(clientset *kubernetes.Clientset) {
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*corev1.Pod)
-				fmt.Printf("New Pod Added: %s in namespace %s\n", pod.Name, pod.Namespace)
+				info := color.New(color.FgHiGreen).PrintfFunc()
+				info("[+]Pod Added: %s in namespace %s\n", pod.Name, pod.Namespace)
 				CheckPodSecurity(pod)
 			},
 			DeleteFunc: func(obj interface{}) {

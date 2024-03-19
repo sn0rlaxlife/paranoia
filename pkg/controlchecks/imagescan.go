@@ -6,9 +6,39 @@ import (
 	"os/exec"
 	"strings"
 
+	trivyv1alpha "github.com/aquasecurity/trivy-operator/pkg/apis/aquasecurity/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type ReportFilter struct {
+	ImageName string
+	Labels    map[string]string
+}
+
+func init() {
+	// Register the trivy operator types with the global scheme
+	_ = trivyv1alpha.AddToScheme(scheme.Scheme)
+}
+
+func FetchVulnerabilityReports(ctx context.Context, cfg *rest.Config, namespace string) ([]trivyv1alpha.VulnerabilityReport, error) {
+	// Create a new client
+	c, err := client.New(cfg, client.Options{})
+	if err != nil {
+		return nil, err
+	}
+
+	// List all the VulnerabilityReports in the namespace
+	var reportsList trivyv1alpha.VulnerabilityReportList
+	if err := c.List(ctx, &reportsList, client.InNamespace(namespace)); err != nil {
+		return nil, err
+	}
+
+	return reportsList.Items, nil
+}
 
 func ScanImages(clientset *kubernetes.Clientset, imageFlag string) error {
 	// Check if Docker is Installed

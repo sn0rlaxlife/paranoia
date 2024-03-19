@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: paranoia-kspm
+spec:
+  template:
+    spec:
+      containers:
+      - name: paranoia-kspm-pod
+        image: rodriguezsr429/paranoia:0.02
+        command: ["/usr/local/bin/paranoia"]
+        args: ["rbac"]
+        env:
+        - name: KUBECONFIG
+          value: /etc/kubeconfig/config
+        volumeMounts:
+        - name: kubeconfig
+          mountPath: /etc/kubeconfig
+          readOnly: true
+      volumes:
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig
+      restartPolicy: Never
+  backoffLimit: 4

@@ -15,10 +15,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o paranoia .
 
 # Final stage using a minimal base image.
-FROM scratch
+FROM alpine:3.18.6
 
 # Copy the Go static executable from the build stage.
-COPY --from=builder /app/paranoia /paranoia
+COPY --from=builder /app/paranoia /usr/local/bin/paranoia
 
 # Run the compiled binary.
-ENTRYPOINT ["/paranoia"]
+ENTRYPOINT ["/usr/local/bin/paranoia"]

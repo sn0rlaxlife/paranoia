@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"kspm/pkg/controlchecks"
 	"kspm/pkg/entity"
 	watcher "kspm/pkg/k8s"
 	"kspm/pkg/riskposture"
@@ -10,7 +12,9 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/kubernetes/pkg/apis/rbac"
 )
 
 var kubeconfig *string
@@ -51,14 +55,30 @@ var checkCmd = &cobra.Command{
 	Long:  `Runs the control checks against the cluster.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Initialize Kubernetes client
-		clientset, err := initClient()
+		if kubeconfig == nil {
+			fmt.Fprintf(os.Stderr, "Error: kubeconfig not set\n")
+			os.Exit(1)
+		}
+		config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error building Kubernetes config: %v\n", err)
+			os.Exit(1)
+		}
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating Kubernetes client: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Fetch roles
+		roleList, err := clientset.RbacV1().Roles("").List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error fetching roles: %v\n", err)
 			os.Exit(1)
 		}
 
 		// Start the entity Kubernetes watcher
-		entity.RBACRoles(clientset)
+		entity.NewRBACRoleList(roleList.Items)
 	},
 }
 var deploymentCmd = &cobra.Command{
@@ -109,24 +129,79 @@ var displayRiskLevelsCmd = &cobra.Command{
 		}
 
 		// Call the NewRBACRoleList Function with the roles from rolelist
-		roles, err := rbac.NewRBACRoleList(roleList)
+		roles, allFlaggedPermissions := entity.NewRBACRoleList(roleList.Items)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating RBAC role list: %v\n", err)
 			os.Exit(1)
 		}
-
-		// Initialize the function
 		var functions []riskposture.Function
-		for _, role := range roles {
-			roleFunctions := rbac.ConvertRoleToFunction(role, [][]rbac.PolicyRule{})
+		for i, role := range roles {
+			// Get the flagged permissions for the current role
+			flaggedPermissions := allFlaggedPermissions[i]
+
+			// Flagged permissions used
+			fmt.Println("Flagged permissions for role", role, ":", flaggedPermissions)
+
+			// Initialize policyRules with an empty slice or fetch the actual policy rules
+			rbacPolicyRules := [][]rbac.PolicyRule{}
+			entityPolicyRules := make([][]entity.PolicyRule, len(rbacPolicyRules))
+
+			for i, rules := range rbacPolicyRules {
+				for _, rule := range rules {
+					// Convert rbac.PolicyRule to entity.PolicyRule
+					entityRule := entity.PolicyRule{
+						Verbs:         rule.Verbs,
+						APIGroups:     rule.APIGroups,
+						Resources:     rule.Resources,
+						ResourceNames: rule.ResourceNames,
+						// Fill in the fields of entity.PolicyRule based on rule
+					}
+					entityPolicyRules[i] = append(entityPolicyRules[i], entityRule)
+				}
+			}
+
+			roleFunctions := entity.ConvertRoleToFunction(role, entityPolicyRules)
 			functions = append(functions, roleFunctions...)
 		}
-
 		// Create a new RiskPosture with the functions
 		riskPostureInstance := riskposture.NewRiskPosture(functions)
 
 		// Display the risk levels
 		riskPostureInstance.DisplayRiskLevels()
+	},
+}
+
+var scan = &cobra.Command{
+	Use:   "scan",
+	Short: "Scan images for vulnerabilities",
+	Long:  `Scans the images for vulnerabilities.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		// Flag will be declared here for inputs
+		cfg, err := rest.InClusterConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting Kubernetes config: %v\n", err)
+			os.Exit(1)
+		}
+
+		ctx := context.Background()
+		namespace := cmd.Flag("namespace").Value.String() // Make sure namespace is defined or fetched from flags
+
+		if namespace == "" {
+			fmt.Fprintf(os.Stderr, "Namespace is required\n")
+			os.Exit(1)
+		}
+
+		reports, err := controlchecks.FetchVulnerabilityReports(ctx, cfg, namespace)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error fetching vulnerability reports: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Do something with the reports...
+		fmt.Println("Starting to print reports...")
+		for _, report := range reports {
+			fmt.Printf("Report: %v\n", report)
+		}
 	},
 }
 
@@ -136,6 +211,7 @@ func init() {
 	rootCmd.AddCommand(deploymentCmd)
 	rootCmd.AddCommand(displayRiskLevelsCmd)
 	rootCmd.AddCommand(rbacCmd)
+	rootCmd.AddCommand(reportCmd)
 	// Here you will define your flags and configuration settings.
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:

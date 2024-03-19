@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: paranoia-kspm-pod
+spec:
+  containers:
+  - name: paranoia-kspm-container
+    image: rodriguezsr429/paranoia:0.02
+    command: ["/bin/sh", "-c"]
+    args: ["/usr/local/bin/paranoia --rbac; sleep 3600"]
+    env:
+    - name: KUBECONFIG
+      value: /etc/kubeconfig/config
+    resources:
+      limits:
+        cpu: "1"
+        memory: "512Mi"
+      requests:
+        cpu: "0.5"
+        memory: "256Mi"
+    volumeMounts:
+    - name: kubeconfig
+      mountPath: /etc/kubeconfig
+      readOnly: true
+  volumes:
+  - name: kubeconfig
+    secret:
+      secretName: kubeconfig
+  restartPolicy: Never

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ func TestMain(m *testing.M) {
 
 func TestMainFunction(t *testing.T) {
 	// Mock initClient function
-	initClient = func() (*kubernetes.Clientset, error) {
+	newInitClient := func() (*kubernetes.Clientset, error) {
 		return nil, fmt.Errorf("mock error")
 	}
 
@@ -58,8 +59,7 @@ func TestWatchCommand(t *testing.T) {
 
 	// Capture stdout
 	var buf bytes.Buffer
-	os.Stdout = &buf
-
+	os.Stdout = os.NewFile(uintptr(syscall.Stdout), "/dev/stdout")
 	// Set watchFlag
 	watchFlag = true
 
