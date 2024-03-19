@@ -193,12 +193,11 @@ func createDeploymentCmd() *cobra.Command {
 				os.Exit(1)
 			}
 			color.Green("Running deployment checks...")
-			deployments, err := clientset.AppsV1().Deployments("").List(cmd.Context(), metav1.ListOptions{})
+			deploymentList, violationCount, err := entity.GetDeploymentsAndViolationCount(clientset)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error fetching deployments: %v\n", err)
+				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
 			}
-			deploymentList, violationCount := entity.NewDeploymentList(deployments)
 			fmt.Printf("Number of deployments with no labels: %d\n", violationCount)
 			for _, deployment := range deploymentList {
 				fmt.Printf("Name: %s, Namespace: %s, Replicas: %d, Labels: %v\n", deployment.Name, deployment.Namespace, deployment.Replicas, deployment.Labels)
