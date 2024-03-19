@@ -198,7 +198,7 @@ func createDeploymentCmd() *cobra.Command {
 				fmt.Fprintf(os.Stderr, "Error fetching deployments: %v\n", err)
 				os.Exit(1)
 			}
-			deploymentList, violationCount := rbac.NewDeploymentList(deployments)
+			deploymentList, violationCount := entity.NewDeploymentList(deployments)
 			fmt.Printf("Number of deployments with no labels: %d\n", violationCount)
 			for _, deployment := range deploymentList {
 				fmt.Printf("Name: %s, Namespace: %s, Replicas: %d, Labels: %v\n", deployment.Name, deployment.Namespace, deployment.Replicas, deployment.Labels)

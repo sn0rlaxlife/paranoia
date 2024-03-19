@@ -56,7 +56,7 @@ func AnalyzeClusterRoles(clientset *kubernetes.Clientset, clusterRoleName string
 	// Fetch cluster roles
 	clusterRole, err := rbacClient.ClusterRoles().Get(context.TODO(), clusterRoleName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to fetch cluster role: %v", err)
+		return fmt.Errorf("failed to fetch cluster role: %v", err)
 	}
 
 	// Analyze permissions
@@ -64,11 +64,11 @@ func AnalyzeClusterRoles(clientset *kubernetes.Clientset, clusterRoleName string
 		fmt.Println("Rule:", rule)
 
 		// Resource Access
-		fmt.Println("    -API Groups: %v\n", rule.APIGroups)
-		fmt.Println("    -Resources: %v\n", rule.Resources)
+		fmt.Printf("    -API Groups: %v\n", rule.APIGroups)
+		fmt.Printf("    -Resources: %v\n", rule.Resources)
 
 		// Verbs
-		fmt.Println("    -Verbs: %v\n", rule.Verbs)
+		fmt.Printf("    -Verbs: %v\n", rule.Verbs)
 
 		// Potential risks
 		if hasWildcard(rule.Verbs) {
@@ -224,9 +224,8 @@ func extractPermissionsAndResources(rule PolicyRule) ([]string, []string, []stri
 			flaggedPermissions = append(flaggedPermissions, verb)
 		}
 	}
-	for _, resource := range rule.Resources {
-		resources = append(resources, resource)
-	}
+
+	resources = rule.Resources
 
 	return permissions, resources, flaggedPermissions, nil
 }

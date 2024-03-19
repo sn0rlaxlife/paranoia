@@ -6,7 +6,10 @@ import (
 	"kspm/pkg/controlchecks"
 	"os"
 
+	"kspm/pkg/reports"
+
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/rest"
 )
 
 var namespace string
@@ -17,20 +20,26 @@ var reportCmd = &cobra.Command{
 	Long:  `This command generates a report of the cluster's security posture.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Initialize Kubernetes client
-		cfg, err := trivyK8s.InitClient()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
+		kubeconfig := os.Getenv("KUBECONFIG")
+		if kubeconfig == "" {
+			fmt.Fprintln(os.Stderr, "Error: KUBECONFIG environment variable not set")
 			os.Exit(1)
 		}
 		// Fetch and format vulnerabilities
-		vulnerabilities, err := pkg.reports.FetchAndFormatVulnerabilities(context.Background(), cfg, namespace)
+		vulnerabilities, err := reports.FetchAndFormatVulnerabilities(context.Background(), kubeconfig, namespace)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error fetching vulnerabilities: %v\n", err)
 			os.Exit(1)
 		}
 		// Print the vulnerabilities table
-		pkg.reports.PrintVulnerabilityTable(vulnerabilities)
-
+		reports.PrintVulnerabilityTable(vulnerabilities)
+		// Fetch and print RBAC settings
+		// Initialize a clientset that is taken by the Fetch Vulnerability Reports function
+		cfg, err := rest.InClusterConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating in-cluster config: %v\n", err)
+			os.Exit(1)
+		}
 		controlchecks.FetchVulnerabilityReports(context.Background(), cfg, namespace)
 	},
 }
