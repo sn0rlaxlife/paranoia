@@ -10,8 +10,7 @@ INSTALL_PATH ?= /usr/local/bin
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 GIT_TAG    := $(shell git describe --tags --exact-match 2>/dev/null || true)
-CLI_VERSION := $(shell git describe --tags),$(shell git describe --tags --abbrev=0)
-
+CLI_VERSION ?= $(if $(shell git describe --tags),$(shell git describe --tags),"UnknownVersion")
 
 # Go CLI options
 PKG         := ./...
@@ -35,7 +34,7 @@ ensure-trivy-operator:
 		echo "Please install it following the instructions at https://github.com/aquasecurity/trivy-operator#installation"; \
 		exit 1; \
 	fi
-	
+
 .PHONY: all
 all: build test
 
