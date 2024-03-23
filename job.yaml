@@ -7,9 +7,9 @@ spec:
     spec:
       containers:
       - name: paranoia-kspm-pod
-        image: rodriguezsr429/paranoia:0.02
-        command: ["/usr/local/bin/paranoia"]
-        args: ["rbac"]
+        image: rodriguezsr429/paranoia:0.0.3
+        command: ["./paranoia"]
+        args: ["rbac", "-b"]
         env:
         - name: KUBECONFIG
           value: /etc/kubeconfig/config
