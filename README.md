@@ -9,7 +9,7 @@ This project serves as a kubernetes security posture management tool written in 
 ## Quick Start
 To leverage this tool in your cluster run the following commands.
 ```bash
-git clone https://github.com/sn0rlaxlife/paranoia.git && cd /paranoia</code>
+git clone https://github.com/sn0rlaxlife/paranoia.git && cd /paranoia
 ```
 
 
