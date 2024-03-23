@@ -271,8 +271,13 @@ func createRbacCmd() *cobra.Command {
 				for _, rule := range rules {
 					// Convert rbacv1.PolicyRule to entity.PolicyRule
 					entityRule := entity.PolicyRule{
+						// API Groups, Verbs, and Resources are the only fields required for the conversion
 						APIGroups: rule.APIGroups,
-						Verbs:     rule.Verbs,
+
+						// Verbs represents a list of vers this rule applies to
+						Verbs: rule.Verbs,
+
+						// Resources represents a list of resources this rule applies to
 						Resources: rule.Resources,
 						// Add other fields as necessary
 					}

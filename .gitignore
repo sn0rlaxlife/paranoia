@@ -23,3 +23,6 @@ go.work
 
 # Cluster Role Interaction
 rbac.yaml
+
+# Docker documents - for jobs related to batch
+Dockerfile

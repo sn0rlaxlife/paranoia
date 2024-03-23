@@ -6,6 +6,7 @@ import (
 	"kspm/pkg/riskposture"
 	"log"
 
+	"github.com/fatih/color"
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -105,22 +106,27 @@ func hasDangerousVerbs(verbs []string) bool {
 }
 
 func PrintExcessPrivileges(excessPrivileges [][]PolicyRule) {
+	red := color.New(color.FgRed).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+	blue := color.New(color.FgBlue).SprintFunc()
+
 	for _, policyRules := range excessPrivileges {
 		for _, rule := range policyRules {
-			// access permissions from rule
-			for _, verb := range rule.Verbs {
-				fmt.Println("Verb:", verb)
-			}
-			// access resources from rule
-			for _, resource := range rule.Resources {
-				fmt.Println("Resource:", resource)
-			}
-			for _, apiGroup := range rule.APIGroups {
-				fmt.Println("API Group:", apiGroup)
+			for i := 0; i < len(rule.Verbs) || i < len(rule.Resources) || i < len(rule.APIGroups); i++ {
+				var verb, resource, apiGroup string
+				if i < len(rule.Verbs) {
+					verb = red(rule.Verbs[i])
+				}
+				if i < len(rule.Resources) {
+					resource = green(rule.Resources[i])
+				}
+				if i < len(rule.APIGroups) {
+					apiGroup = blue(rule.APIGroups[i])
+				}
+				fmt.Printf("API Group: %s, Verb: %s, Resource: %s\n", apiGroup, verb, resource)
 			}
 		}
 	}
-
 }
 
 // Newrole list creates a role list from the kubernetes RBAC
