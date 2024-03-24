@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"kspm/pkg/riskposture"
 	"log"
+	"os"
+	"text/tabwriter"
 
 	"github.com/fatih/color"
 	v1 "k8s.io/api/rbac/v1"
@@ -72,10 +74,10 @@ func AnalyzeClusterRoles(clientset *kubernetes.Clientset, clusterRoleName string
 		fmt.Printf("    -Verbs: %v\n", rule.Verbs)
 
 		// Potential risks
-		if hasWildcard(rule.Verbs) {
+		if HasWildcard(rule.Verbs) {
 			fmt.Println("   -Warning: Wildcard verbs detected ****highly privileged****")
 		}
-		if hasDangerousVerbs(rule.Verbs) {
+		if HasDangerousVerbs(rule.Verbs) {
 			fmt.Println("   -Warning: Dangerous verbs detected ****highly privileged****")
 		}
 	}
@@ -84,7 +86,7 @@ func AnalyzeClusterRoles(clientset *kubernetes.Clientset, clusterRoleName string
 
 }
 
-func hasWildcard(verbs []string) bool {
+func HasWildcard(verbs []string) bool {
 	for _, verb := range verbs {
 		if verb == "*" {
 			return true
@@ -93,7 +95,7 @@ func hasWildcard(verbs []string) bool {
 	return false
 }
 
-func hasDangerousVerbs(verbs []string) bool {
+func HasDangerousVerbs(verbs []string) bool {
 	dangerousVerbs := []string{"create", "delete", "update", "patch", "bind"}
 	for _, verb := range verbs {
 		for _, dangerousVerb := range dangerousVerbs {
@@ -110,6 +112,11 @@ func PrintExcessPrivileges(excessPrivileges [][]PolicyRule) {
 	green := color.New(color.FgGreen).SprintFunc()
 	blue := color.New(color.FgBlue).SprintFunc()
 
+	// Initialize a tabwriter
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	// Print the headers
+	fmt.Fprintln(w, "API Group\tVerb\tResource")
+
 	for _, policyRules := range excessPrivileges {
 		for _, rule := range policyRules {
 			for i := 0; i < len(rule.Verbs) || i < len(rule.Resources) || i < len(rule.APIGroups); i++ {
@@ -123,10 +130,13 @@ func PrintExcessPrivileges(excessPrivileges [][]PolicyRule) {
 				if i < len(rule.APIGroups) {
 					apiGroup = blue(rule.APIGroups[i])
 				}
-				fmt.Printf("API Group: %s, Verb: %s, Resource: %s\n", apiGroup, verb, resource)
+				// Print the data
+				fmt.Fprintf(w, "%s\t%s\t%s\n", apiGroup, verb, resource)
 			}
 		}
 	}
+	// Flush the writer to print the output
+	w.Flush()
 }
 
 // Newrole list creates a role list from the kubernetes RBAC
@@ -135,10 +145,10 @@ func NewRBACRoleList(roles []v1.Role) (RBACRoles, [][]string) {
 	var allFlaggedPermissions [][]string
 	for _, role := range roles {
 		// Convert "k8s.io/api/rbac/v1".Role to PolicyRule
-		policyRule := convertRoleToPolicyRule(role)
+		policyRule := ConvertRoleToPolicyRule(role)
 
 		// Assign the 4 return values from extractPermissionsAndResources to 4 variables
-		permissions, resources, flaggedPermissions, err := extractPermissionsAndResources(policyRule)
+		permissions, resources, flaggedPermissions, err := ExtractPermissionsAndResources(policyRule)
 		if err != nil {
 			log.Printf("Error extracting permissions and resources: %v", err)
 			continue
@@ -158,7 +168,7 @@ func NewRBACClusterRoleList(roles []v1.ClusterRole) (RBACRoles, [][]string) {
 	var list RBACRoles
 	var allFlaggedPermissions [][]string
 	for _, role := range roles {
-		policyRules := convertClusterRoleToPolicyRule(role)
+		policyRules := ConvertClusterRoleToPolicyRule(role)
 		// Convert "k8s.io/api/rbac/v1".Role to PolicyRule
 		for _, policyRule := range policyRules {
 			// Convert v1.PolicyRule to PolicyRule
@@ -170,7 +180,7 @@ func NewRBACClusterRoleList(roles []v1.ClusterRole) (RBACRoles, [][]string) {
 			}
 
 			// Assign the 4 return values from extractPermissionsAndResources to 4 variables
-			permissions, resources, _, err := extractPermissionsAndResources(convertedPolicyRule) // Removed flaggedPermissions
+			permissions, resources, _, err := ExtractPermissionsAndResources(convertedPolicyRule) // Removed flaggedPermissions
 			if err != nil {
 				log.Printf("Error extracting permissions and resources: %v", err)
 				continue
@@ -187,12 +197,12 @@ func NewRBACClusterRoleList(roles []v1.ClusterRole) (RBACRoles, [][]string) {
 	return list, allFlaggedPermissions
 }
 
-func convertClusterRoleToPolicyRule(role v1.ClusterRole) []v1.PolicyRule {
+func ConvertClusterRoleToPolicyRule(role v1.ClusterRole) []v1.PolicyRule {
 	// Assuming that the PolicyRules in a ClusterRole are what you want
 	return role.Rules
 }
 
-func convertRoleToPolicyRule(role v1.Role) PolicyRule {
+func ConvertRoleToPolicyRule(role v1.Role) PolicyRule {
 	policyRule := PolicyRule{
 		Verbs:         role.Rules[0].Verbs,
 		APIGroups:     role.Rules[0].APIGroups,
@@ -219,7 +229,7 @@ func ConvertPolicyRules(input []v1.PolicyRule) []PolicyRule {
 }
 
 // extractPermissionsAndResources extracts the permissions and resources from a kubernetes RBAC role
-func extractPermissionsAndResources(rule PolicyRule) ([]string, []string, []string, error) {
+func ExtractPermissionsAndResources(rule PolicyRule) ([]string, []string, []string, error) {
 	var permissions []string
 	var resources []string
 	var flaggedPermissions []string
@@ -244,7 +254,7 @@ func ConvertRoleToFunction(role RBACRoleList, roleList [][]PolicyRule) []riskpos
 	for _, roles := range roleList {
 		// loop over inner slice to access individual roles
 		for _, r := range roles {
-			permissions, resources, flaggedPermissions, err := extractPermissionsAndResources(r)
+			permissions, resources, flaggedPermissions, err := ExtractPermissionsAndResources(r)
 			if err != nil {
 				log.Printf("Error extracting permissions and resources: %v", err)
 				continue

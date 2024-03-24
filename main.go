@@ -9,8 +9,10 @@ import (
 	watcher "kspm/pkg/k8s"
 	"kspm/pkg/reports"
 	"kspm/pkg/trivytypes"
+	"log"
 	"os"
 	"path/filepath"
+	"text/tabwriter"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -55,7 +57,6 @@ var (
 	deploymentFlag bool
 	riskFlag       bool
 	rbacFlag       bool
-	imageFlag      string
 	namespace      string
 	rootCmd        = &cobra.Command{
 		Use:   "paranoia",
@@ -230,16 +231,44 @@ func createRbacCmd() *cobra.Command {
 				return
 			}
 
-			// ClusterRoles
-			clusterRoleList, err := clientset.RbacV1().ClusterRoles().List(context.Background(), metav1.ListOptions{})
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to fetch ClusterRoles: %v\n", err)
-				return
+			// Create a new tabwriter.Writer
+			w := new(tabwriter.Writer)
+			// Initialize the writer to write to os.Stdout with specific formatting parameters
+			w.Init(os.Stdout, 0, 8, 2, '\t', 0)
+
+			// Print the headers of the table
+			fmt.Fprintln(w, "Role\tNamespace\tVerb\tStatus")
+
+			// Create color functions for red and green
+			red := color.New(color.FgRed).SprintFunc()
+			green := color.New(color.FgGreen).SprintFunc()
+
+			// Iterate over the roles
+			for _, role := range roleList.Items {
+				// Iterate over the rules of each role
+				for _, rule := range role.Rules {
+					// If the verbs of the rule are considered dangerous
+					if entity.HasDangerousVerbs(rule.Verbs) {
+						// Print the role's details with the status "Dangerous"
+						for _, verb := range rule.Verbs {
+							fmt.Fprintf(w, "%s\t%-30s\t%s\t%s\n", red(role.Name), green(role.Namespace), verb, "Dangerous")
+						}
+					}
+					// If the verbs of the rule contain a wildcard
+					if entity.HasWildcard(rule.Verbs) {
+						// Print the role's details with the status "Wildcard"
+						for _, verb := range rule.Verbs {
+							fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", red(role.Name), green(role.Namespace), verb, "Wildcard")
+						}
+					}
+				}
 			}
 
+			// Flush the writer to ensure all output is written and aligned
+			w.Flush()
 			// Convert the clusterRoleList.Items to custom role types
-			clusterRoles, _ := rbac.NewRBACClusterRoleList(clusterRoleList.Items) // Removed err
-
+			var clusterRoleList rbacv1.ClusterRoleList
+			clusterRoles, _ := rbac.NewRBACClusterRoleList(clusterRoleList.Items)
 			// Convert roles and clusterRoles to [][]rbacv1.PolicyRule before passing to PrintExcessPrivileges
 			var policyRules [][]rbacv1.PolicyRule
 			for _, role := range roleList.Items {
@@ -305,28 +334,35 @@ func createRbacCmd() *cobra.Command {
 			for _, role := range allRoles {
 				cyan := color.New(color.FgCyan).SprintFunc()
 				yellow := color.New(color.FgYellow).SprintFunc()
-				for _, rule := range role.Rules { // Assuming that your RBACRole has a method GetRules() that returns []rbacv1.PolicyRule
+				for _, rule := range role.Rules {
 					ns := role.Namespace
 					if ns == "" {
-						ns = "No Namespace - ClusterRole"
+						ns = "ClusterRole"
+					}
+					entityRule := entity.PolicyRule(rule)
+					permissions, resources, _, err := rbac.ExtractPermissionsAndResources(entityRule)
+					if err != nil {
+						log.Printf("Error extracting permissions and resources: %v\n", err)
+						continue
 					}
 					var coloredVerbs []string
-					for _, verb := range rule.Verbs {
+					for _, verb := range permissions {
 						if verb == "create" || verb == "delete" || verb == "update" || verb == "patch" {
 							coloredVerbs = append(coloredVerbs, color.New(color.FgRed).SprintFunc()(verb))
 						} else {
 							coloredVerbs = append(coloredVerbs, verb)
 						}
 					}
-					fmt.Printf("Name: %s, NS: %s, Permissions: %v, Resources: %v\n",
+					fmt.Printf("%s, NS: %s, Permissions: %v, Resources: %v\n",
 						cyan(role.Name),
 						yellow(ns),
 						coloredVerbs,
-						yellow(rule.Resources))
+						yellow(resources))
 				} // Closing brace for the inner for loop
 			} // Closing brace for the outer for loop
 		}, // Closing brace for the Run function
 	} // Closing brace for the rbacCmd definition
+
 	// Add the watch command to the root command
 	rbacCmd.Flags().BoolVarP(&rbacFlag, "rbac", "b", false, "Run RBAC checks")
 	return rbacCmd
