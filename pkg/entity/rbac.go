@@ -6,6 +6,7 @@ import (
 	"kspm/pkg/riskposture"
 	"log"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/fatih/color"
@@ -119,20 +120,16 @@ func PrintExcessPrivileges(excessPrivileges [][]PolicyRule) {
 
 	for _, policyRules := range excessPrivileges {
 		for _, rule := range policyRules {
-			for i := 0; i < len(rule.Verbs) || i < len(rule.Resources) || i < len(rule.APIGroups); i++ {
-				var verb, resource, apiGroup string
-				if i < len(rule.Verbs) {
-					verb = red(rule.Verbs[i])
-				}
-				if i < len(rule.Resources) {
-					resource = green(rule.Resources[i])
-				}
-				if i < len(rule.APIGroups) {
-					apiGroup = blue(rule.APIGroups[i])
-				}
-				// Print the data
-				fmt.Fprintf(w, "%s\t%s\t%s\n", apiGroup, verb, resource)
-			}
+			verbs := strings.Join(rule.Verbs, ", ")
+			resources := strings.Join(rule.Resources, ", ")
+			apiGroups := strings.Join(rule.APIGroups, ", ")
+
+			// Color the strings
+			verb := red(verbs)
+			resource := green(resources)
+			apiGroup := blue(apiGroups)
+			// Print the data
+			fmt.Fprintf(w, "%s\t%s\t%s\n", apiGroup, verb, resource)
 		}
 	}
 	// Flush the writer to print the output

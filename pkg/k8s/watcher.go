@@ -1,7 +1,11 @@
 package kubernetes
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"regexp"
 
 	"github.com/fatih/color"
 	corev1 "k8s.io/api/core/v1"
@@ -66,6 +70,7 @@ func CheckPodSecurity(pod *corev1.Pod) {
 			warning("Warning: Pod %s in namespace %s has a privileged container\n", pod.Name, pod.Namespace)
 		}
 	}
+	// Example security check: Check for insecure capabilities
 	// Implement more security checks here
 	for _, container := range pod.Spec.Containers {
 		if container.SecurityContext != nil && container.SecurityContext.Capabilities != nil {
@@ -81,4 +86,62 @@ func CheckPodSecurity(pod *corev1.Pod) {
 		warning := color.New(color.FgHiRed).PrintfFunc()
 		warning("Warning: Pod %s in namespace %s has host network access\n", pod.Name, pod.Namespace)
 	}
+}
+
+var imageNameRegex = regexp.MustCompile(`(?:([^/]+)/)?([^@:]+)(?:[@:](.+))?`)
+
+func CheckServiceAccount(pod *corev1.Pod, clientset *kubernetes.Clientset) {
+	serviceAccount, err := clientset.CoreV1().ServiceAccounts(pod.Namespace).Get(context.TODO(), pod.Spec.ServiceAccountName, metav1.GetOptions{})
+	if err != nil {
+		fmt.Printf("Error getting service account: %v\n", err)
+		return
+	}
+	for _, secret := range serviceAccount.Secrets {
+		secret, err := clientset.CoreV1().Secrets(pod.Namespace).Get(context.TODO(), secret.Name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Printf("Error getting secret: %v\n", err)
+			continue
+		}
+		if secret.Type == corev1.SecretTypeServiceAccountToken {
+			warning := color.New(color.FgHiRed).PrintfFunc()
+			warning("Warning: Pod %s in namespace %s is using a service account token\n", pod.Name, pod.Namespace)
+		}
+	}
+
+}
+
+func sendImagesToGuac(images []string) error {
+	for _, image := range images {
+		// Remove the 'registry.k8s.io/' prefix from the image name
+		matches := imageNameRegex.FindStringSubmatch(image)
+		if matches == nil {
+			return fmt.Errorf("failed to parse image name %s", image)
+		}
+		imageNameAndTag := fmt.Sprintf("%s:%s", matches[2], matches[3])
+		// Pull the image with Docker
+		fmt.Printf("Pulling image %s\n", imageNameAndTag)
+		pullCmd := exec.Command("docker", "pull", imageNameAndTag)
+		pullOutput, err := pullCmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to pull image %s: %s, error: %w", imageNameAndTag, string(pullOutput), err)
+		}
+
+		// Get the home directory
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %w", err)
+		}
+
+		// Scan the image with Trivy in a Docker container
+		scanCmd := exec.Command("docker", "run", "--rm", "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", fmt.Sprintf("%s/Library/Caches:/root/.cache/", homeDir), "aquasec/trivy", "image", imageNameAndTag)
+		scanOutput, err := scanCmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to scan image %s: %s, error: %w", imageNameAndTag, string(scanOutput), err)
+		}
+
+		// Print the scan output
+		fmt.Printf("Output for image %s: %s\n", imageNameAndTag, string(scanOutput))
+	}
+
+	return nil
 }

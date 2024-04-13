@@ -55,7 +55,7 @@ func GetDeploymentList(clientset kubernetes.Interface) (*v1.DeploymentList, erro
 func GetDeploymentsAndViolationCount(clientset *kubernetes.Clientset) ([]Deployment, int, error) {
 	deployments, err := clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error fetching deployments: %v", err)
+		return []Deployment{}, 0, fmt.Errorf("Error fetching deployments: %v", err)
 	}
 	deploymentList, violationCount := NewDeploymentList(deployments)
 	return deploymentList, violationCount, nil

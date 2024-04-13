@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/fatih/color"
@@ -199,9 +200,23 @@ func createDeploymentCmd() *cobra.Command {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
 			}
-			fmt.Printf("Number of deployments with no labels: %d\n", violationCount)
+			green := color.New(color.FgGreen).SprintFunc()
+			red := color.New(color.FgHiRed).SprintFunc()
+			blue := color.New(color.FgHiBlue).SprintFunc()
+			cyan := color.New(color.FgHiCyan).SprintFunc()
+			fmt.Printf("%s: %d\n", red("Number of deployments with no labels"), violationCount)
 			for _, deployment := range deploymentList {
-				fmt.Printf("Name: %s, Namespace: %s, Replicas: %d, Labels: %v\n", deployment.Name, deployment.Namespace, deployment.Replicas, deployment.Labels)
+				fmt.Printf("Name: %s, Namespace: %s, Replicas: %s\n",
+					green(deployment.Name),
+					blue(deployment.Namespace),
+					cyan(deployment.Replicas))
+
+				labels := make([]string, 0, len(deployment.Labels))
+				for key, value := range deployment.Labels {
+					labels = append(labels, fmt.Sprintf("%s: %s", key, value))
+				}
+				fmt.Printf("Labels: %s\n", blue(strings.Join(labels, ", ")))
+				fmt.Println()
 			}
 		},
 	}
@@ -237,11 +252,13 @@ func createRbacCmd() *cobra.Command {
 			w.Init(os.Stdout, 0, 8, 2, '\t', 0)
 
 			// Print the headers of the table
-			fmt.Fprintln(w, "Role\tNamespace\tVerb\tStatus")
+			fmt.Fprintln(w, "Role\tNamespace\tVerb\tRisk")
 
 			// Create color functions for red and green
 			red := color.New(color.FgRed).SprintFunc()
 			green := color.New(color.FgGreen).SprintFunc()
+			yellow := color.New(color.FgYellow).SprintFunc()
+			hired := color.New(color.FgHiRed).SprintFunc()
 
 			// Iterate over the roles
 			for _, role := range roleList.Items {
@@ -251,7 +268,7 @@ func createRbacCmd() *cobra.Command {
 					if entity.HasDangerousVerbs(rule.Verbs) {
 						// Print the role's details with the status "Dangerous"
 						for _, verb := range rule.Verbs {
-							fmt.Fprintf(w, "%s\t%-30s\t%s\t%s\n", red(role.Name), green(role.Namespace), verb, "Dangerous")
+							fmt.Fprintf(w, "%s\t%-70s\t%-70s\t%s\n", red(role.Name), green(role.Namespace), yellow(verb), hired("Dangerous"))
 						}
 					}
 					// If the verbs of the rule contain a wildcard
