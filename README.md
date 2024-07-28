@@ -9,12 +9,12 @@ This project serves as a kubernetes security posture management tool written in 
 ## Quick Start
 To leverage this tool in your cluster run the following commands.
 ```bash
-git clone https://github.com/sn0rlaxlife/paranoia.git && cd /paranoia
+git clone https://github.com/sn0rlaxlife/paranoia.git && cd paranoia
 ```
 
 
 <b> The Makefile checks if Trivy-operator is installed to run on CRD Checks </b>
-Use of trivyoperator.sh 
+Use of trivyoperator.sh (if this isn't installed run chmod +x trivyoperator.sh -> ./trivyoperator.sh
 ```bash
 make build
 ```
