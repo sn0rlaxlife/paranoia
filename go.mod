@@ -1,7 +1,7 @@
 module kspm
 
 go 1.21.6
-toolchain go1.22.2
+toolchain go1.22.5
 
 require (
 	github.com/aquasecurity/trivy-db v0.0.0-20240327054820-0ccb5f01aad8
@@ -12,7 +12,7 @@ require (
 	k8s.io/api v0.30.0
 	k8s.io/apimachinery v0.30.0
 	k8s.io/client-go v0.30.0
-	k8s.io/kubernetes v1.29.7
+	k8s.io/kubernetes v1.29.14
 	sigs.k8s.io/controller-runtime v0.17.2
 )
 
@@ -61,9 +61,9 @@ require (
 	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
-	golang.org/x/term v0.19.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
