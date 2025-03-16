@@ -1,6 +1,6 @@
 // /pkg/kubernetes/client.go
 
-package kubernetes
+package k8s
 
 import (
 	"os"

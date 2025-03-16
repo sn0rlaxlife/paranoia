@@ -2,27 +2,27 @@ package main
 
 import (
 	"context"
-	"fmt" // Adjust this import to match your project's structure
-	"kspm/pkg/controlchecks"
-	"kspm/pkg/entity"
-	rbac "kspm/pkg/entity"
-	watcher "kspm/pkg/k8s"
-	"kspm/pkg/reports"
-	"kspm/pkg/trivytypes"
-	"log"
+	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
-	"strings"
-	"text/tabwriter"
-
+	"syscall"
+    "strings"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"kspm/pkg/k8s"
+	"kspm/pkg/controlchecks"
+	"kspm/pkg/entity"
+	"kspm/pkg/reports"
+	"kspm/pkg/trivytypes"
+	"log"
+	"text/tabwriter"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	// Adjust this import to match your project's structure
 )
 
@@ -53,20 +53,30 @@ func initClient() (*kubernetes.Clientset, error) {
 }
 
 var (
-	watchFlag      bool
-	checkFlag      bool
-	deploymentFlag bool
-	riskFlag       bool
-	rbacFlag       bool
-	namespace      string
-	rootCmd        = &cobra.Command{
+	watchPodsFlag  	      bool
+	watchDeploymentsFlag  bool
+	watchSecretsFlag 	  bool
+	watchClusterRolesFlag bool
+	watchFlag      	      bool
+	checkFlag      	      bool
+	deploymentFlag 		  bool
+	riskFlag       		  bool
+	rbacFlag       	      bool
+	namespace             string
+	rootCmd        = &cobra.Command{ 
 		Use:   "paranoia",
 		Short: "Paranoia is a tool for monitoring and securing Kubernetes clusters",
 	}
 )
 
+// Declare secRoles with correct Type
+var securityRoles entity.RBACRoles
+
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&watchFlag, "watch", "w", false, "Start watching Kubernetes resources")
+	rootCmd.PersistentFlags().BoolVar(&watchPodsFlag, "watch-pods", false, "Watch Pods")
+	rootCmd.PersistentFlags().BoolVar(&watchDeploymentsFlag, "watch-deployments", false, "Watch Deployments")
+	rootCmd.PersistentFlags().BoolVar(&watchSecretsFlag, "watch-secrets", false, "Watch Secrets")
+	rootCmd.PersistentFlags().BoolVar(&watchClusterRolesFlag, "watch-clusterroles", false, "Watch ClusterRoles")
 	rootCmd.PersistentFlags().BoolVarP(&checkFlag, "check", "c", false, "Run control checks")
 	rootCmd.PersistentFlags().BoolVarP(&deploymentFlag, "deployment", "d", false, "Run deployment checks")
 	rootCmd.PersistentFlags().BoolVarP(&riskFlag, "risk", "r", false, "Run risk checks")
@@ -100,8 +110,37 @@ func createWatchCmd() *cobra.Command {
 					fmt.Fprintf(os.Stderr, "Error initializing Kubernetes client: %v\n", err)
 					os.Exit(1)
 				}
+				// watch Options
+				watchOptions := map[string]bool{
+					"pods":		  watchPodsFlag,
+					"deployments":    watchDeploymentsFlag,
+					"secrets":	  watchSecretsFlag,
+					"clusterRoles":   watchClusterRolesFlag,
+				}
+
+				// Stop channels
+				stopChannels := k8s.StartKubernetesWatchers(clientset, watchOptions)
+
+				// Set up signal handling for graceful shutdown
+				sigCh := make(chan os.Signal, 1)
+				signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+				<-sigCh
+				color.Yellow("Shutting down watchers...")
+				// Stop all watchers
+				for _, stop := range stopChannels {
+					close(stop)
+				}
 				// Start the watcher
-				watcher.WatchPods(clientset)
+				//watcher.WatchPods(clientset)
+				//watcher.WatchClusterRoles(clientset)
+				//watcher.WatchNamespaces(clientset) // Add this line to watch namespaces
+				//watcher.WatchDeployments(clientset) // Add this line to watch deployments
+				//watcher.WatchSecrets(clientset)     // Add this line to watch secrets
+				//watcher.CheckClusterRoleSecurity(clientset) // Add this line to check cluster role security
+				//watcher.CheckServiceAccountSecrets(clientset) // Add this line to check service account secrets
+				//watcher.CheckDeploymentSecurity(clientset) // Add this line to check deployment security
+				//watcher.CheckPodSecurityWithReporting(clientset) // Add this line to check pod security with reporting
+				//watcher.StartKubernetesWatchers(clientset) // Add this line to start all watchers
 			} else {
 				color.Green("Watch flag is false............")
 			}
@@ -285,7 +324,7 @@ func createRbacCmd() *cobra.Command {
 			w.Flush()
 			// Convert the clusterRoleList.Items to custom role types
 			var clusterRoleList rbacv1.ClusterRoleList
-			clusterRoles, _ := rbac.NewRBACClusterRoleList(clusterRoleList.Items)
+			clusterRoles, _ := entity.NewRBACClusterRoleList(clusterRoleList.Items)
 			// Convert roles and clusterRoles to [][]rbacv1.PolicyRule before passing to PrintExcessPrivileges
 			var policyRules [][]rbacv1.PolicyRule
 			for _, role := range roleList.Items {
@@ -332,7 +371,7 @@ func createRbacCmd() *cobra.Command {
 				entityPolicyRules = append(entityPolicyRules, entityRules)
 			}
 
-			rbac.PrintExcessPrivileges(entityPolicyRules) // Changed rbrbacvertPolicyRules to entityPolicyRules
+			entity.PrintExcessPrivileges(entityPolicyRules) // Changed rbrbacvertPolicyRules to entityPolicyRules
 			color.Green("Running RBAC checks...")
 			// Display the converted roles
 			// Display the converted roles
@@ -357,7 +396,7 @@ func createRbacCmd() *cobra.Command {
 						ns = "ClusterRole"
 					}
 					entityRule := entity.PolicyRule(rule)
-					permissions, resources, _, err := rbac.ExtractPermissionsAndResources(entityRule)
+					permissions, resources, _, err := entity.ExtractPermissionsAndResources(entityRule)
 					if err != nil {
 						log.Printf("Error extracting permissions and resources: %v\n", err)
 						continue
@@ -432,9 +471,6 @@ func reportCmd() *cobra.Command {
 	reportCmd.Flags().StringVarP(&kubeconfig, "kubeconfig", "k", "", "Path to the kubeconfig file")
 	return reportCmd
 } // Closing brace for the imageScanCmd
-
-// calls securityRoles and flaggedPermissions from entity package
-var securityRoles []rbac.RBACRoleList
 
 // main is the entry point of the program.
 func main() {
