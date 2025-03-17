@@ -99,7 +99,24 @@ func createWatchCmd() *cobra.Command {
 		Long:  `Starts the Kubernetes watcher to monitor resources.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			// Get the flag value
-			flagValue, _ := cmd.Flags().GetBool("watch")
+			//flagValue, _ := cmd.Flags().GetBool("watch") 
+
+			flagValue := watchFlag
+
+			// Check if one resource is selected for watch flag
+			resourceSelected := watchPodsFlag ||
+				watchDeploymentsFlag ||
+				watchSecretsFlag ||
+				watchClusterRolesFlag
+
+			if !resourceSelected {
+				color.Yellow("No resources selected for watch....Please specify at least one resource")
+				color.Yellow("  --watch-pods")
+				color.Yellow("  --watch-deployments")
+				color.Yellow("  --watch-secrets")
+				color.Yellow("  --watch-clusterroles")
+				return
+			}
 
 			// Check the flag value
 			if flagValue {
@@ -112,14 +129,36 @@ func createWatchCmd() *cobra.Command {
 				}
 				// watch Options
 				watchOptions := map[string]bool{
-					"pods":		  watchPodsFlag,
+					"pods":		      watchPodsFlag,
 					"deployments":    watchDeploymentsFlag,
-					"secrets":	  watchSecretsFlag,
+					"secrets":	      watchSecretsFlag,
 					"clusterRoles":   watchClusterRolesFlag,
 				}
+				
+				// Print the reosurces that are selected for watch
+				color.Yellow("Resources being watched:")
+				for resource, enabled := range watchOptions {
+					if enabled {
+						color.Green("  %s", resource)
+					}
+				}
+
+				// Adding debugging code before calls
+				fmt.Println("Debug: About to start watchers with options:", watchOptions)
 
 				// Stop channels
 				stopChannels := k8s.StartKubernetesWatchers(clientset, watchOptions)
+				
+				// Catching signal
+				fmt.Printf("Debug: Received %d stop channels\n", len(stopChannels))
+
+				if len(stopChannels) == 0 {
+					color.Yellow("No resources selected for watch....Check the flags")
+					return
+				}
+
+				// Start signal handling for ops
+				color.Green("Watchers started. Press Ctrl+C to stop")
 
 				// Set up signal handling for graceful shutdown
 				sigCh := make(chan os.Signal, 1)
@@ -127,7 +166,8 @@ func createWatchCmd() *cobra.Command {
 				<-sigCh
 				color.Yellow("Shutting down watchers...")
 				// Stop all watchers
-				for _, stop := range stopChannels {
+				for i, stop := range stopChannels {
+					fmt.Printf("Debug: Closing Stop Channel %d\n", i)
 					close(stop)
 				}
 				// Start the watcher

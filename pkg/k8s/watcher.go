@@ -506,28 +506,38 @@ func CheckSecretSecurity(secret *corev1.Secret) {
 
 // StartKubernetesWatchers initializes all watchers
 func StartKubernetesWatchers(clientset *kubernetes.Clientset, options map[string]bool) []chan struct{} {
-    stopChannels := []chan struct{}{}
+    var stopChannels []chan struct{}
     
+	// Add debugging
+	fmt.Println("Debug: StartKubernetesWatchers called with options:", options)
+
+	// Start watchers based on options
     if options["pods"] {
-        _, stop := WatchPods(clientset)
-        stopChannels = append(stopChannels, stop)
+        _, stopCh := WatchPods(clientset)
+        stopChannels = append(stopChannels, stopCh)
+		color.Green("Pod watcher started")
     }
     
     if options["deployments"] {
-        _, stop := WatchDeployments(clientset)
-        stopChannels = append(stopChannels, stop)
+        _, stopCh := WatchDeployments(clientset)
+        stopChannels = append(stopChannels, stopCh)
+		color.Green("Deployment watcher started")
     }
     
     if options["secrets"] {
-        _, stop := WatchSecrets(clientset)
-        stopChannels = append(stopChannels, stop)
+        _, stopCh := WatchSecrets(clientset)
+        stopChannels = append(stopChannels, stopCh)
+		color.Green("Secret watcher started")
     }
     
-    if options["clusterroles"] {
-        _, stop := WatchClusterRoles(clientset)
-        stopChannels = append(stopChannels, stop)
+    if options["clusterRoles"] {
+		fmt.Println("Debug: Starting ClusterRole watcher")
+        _, stopCh := WatchClusterRoles(clientset)
+        stopChannels = append(stopChannels, stopCh)
+		color.Green("ClusterRole watcher started")
     }
     
+	fmt.Printf("Debug: Started %d watchers\n", len(stopChannels))
     return stopChannels
 }
 
