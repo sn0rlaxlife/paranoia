@@ -6,6 +6,15 @@ Project Paranoia is a kubernetes security posture management tool in development
 This project serves as a kubernetes security posture management tool written in Go, this uses the kubernetes native client to initiate controls such as validation across your cluster on the following best practices. Like many users that are new to ecosystem of microservices this serves as a human-prevention tool on deploying misconfigurations, areas of concern, elevated privileges.
 
 
+## Updates as of June 2025 ##
+This project is still in experimental phase and only to be used for development operations use at your own risk.
+
+- Added functionality now exists to track pods, deployments, secrets, and clusters roles
+```bash
+./paranoia watch -w --watch-pods
+./paranoia watch -w --watch-deployments
+```bash
+
 ## Quick Start
 To leverage this tool in your cluster run the following commands.
 ```bash
