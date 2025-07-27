@@ -5,6 +5,17 @@ Project Paranoia is a kubernetes security posture management tool in development
 ## Introduction ##
 This project serves as a kubernetes security posture management tool written in Go, this uses the kubernetes native client to initiate controls such as validation across your cluster on the following best practices. Like many users that are new to ecosystem of microservices this serves as a human-prevention tool on deploying misconfigurations, areas of concern, elevated privileges.
 
+## Updates as of June 2025 ##
+This project is still in experimental phase and only to be used for development operations use at your own risk.
+
+- Added functionality now exists to track pods, deployments, secrets, and clusters roles this is to target what you are concerned with rather all in one command
+```bash
+./paranoia watch -w --watch-pods
+./paranoia watch -w --watch-deployments
+./paranoia watch -w --watch-secrets
+./paranoia watch -w --watch-clusterroles 
+```
+
 
 ## Updates as of June 2025 ##
 This project is still in experimental phase and only to be used for development operations use at your own risk.
@@ -30,7 +41,7 @@ make build
 
 Run a RBAC (Sanity check) by simply using the CLI syntax below
 ```bash
-./paranoia rbac -r
+./paranoia rbac -b
 ```
 
 Run a deployment check on labels in cluster to identify no labels on various deployments.
@@ -38,10 +49,6 @@ Run a deployment check on labels in cluster to identify no labels on various dep
 ./paranoia deployment -c
 ```
 
-Run Watcher to identify existing pods that are risky in nature this will annotate warnings
-```bash
-./paranoia watch --watch
-```
 
 Run checks to validate high valued roles are running and found in your cluster such as system:certificates.k8s.io, system:auth-delegator, system:aggregate-to-admin. This check will also run a scan on the Node to identify if HA is detected the default value for this is 3 nodes.
 ```bash
