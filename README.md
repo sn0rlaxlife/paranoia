@@ -17,15 +17,6 @@ This project is still in experimental phase and only to be used for development 
 ```
 
 
-## Updates as of June 2025 ##
-This project is still in experimental phase and only to be used for development operations use at your own risk.
-
-- Added functionality now exists to track pods, deployments, secrets, and clusters roles
-```bash
-./paranoia watch -w --watch-pods
-./paranoia watch -w --watch-deployments
-```bash
-
 ## Quick Start
 To leverage this tool in your cluster run the following commands.
 ```bash
