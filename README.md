@@ -16,6 +16,12 @@ This project is still in experimental phase and only to be used for development 
 ./paranoia watch -w --watch-clusterroles 
 ```
 
+## Updates as of December 2025 ##
+- Functionality to build reports
+```bash
+./paranoia report-html --kubeconfig <kube-config>
+``` 
+This centralizes the report in one visual for all checks in a one go round that allows you a risk-posture along with mapping a score report.
 
 ## Quick Start
 To leverage this tool in your cluster run the following commands.
@@ -50,3 +56,51 @@ Run a vulnerability report on a existing namespace this leverages the outbound t
 ```bash
 ./paranoia report --kubeconfig=<kube-config> -n <namespace>
 ```
+
+## Additional Usage & Troubleshooting
+
+### Prerequisites
+- Go toolchain installed (for building the binary)
+- `kubectl` access and a valid kubeconfig (or run in-cluster)
+- Optional: Trivy Operator installed to enable CRD-based vulnerability reports
+
+### Quick Commands
+- Build the binary:
+```bash
+make build
+```
+- Watch resources (pods, deployments, secrets, clusterroles):
+```bash
+./paranoia watch -w --watch-pods
+./paranoia watch -w --watch-deployments --watch-secrets --watch-clusterroles
+```
+- Run control-plane checks:
+```bash
+./paranoia check
+```
+- Run deployment label checks:
+```bash
+./paranoia deployment -d
+```
+- Run RBAC analysis:
+```bash
+./paranoia rbac -b
+```
+- Fetch Trivy-operator vulnerability reports (Requires trivy-operator):
+```bash
+./paranoia report --kubeconfig=/path/to/kubeconfig -n <namespace>
+```
+- Generate and serve the HTML report:
+```bash
+./paranoia report-html --kubeconfig=/path/to/kubeconfig
+```
+
+### HTML Report Image Preview
+If you have a generated security report image, place it at the repository root (or in an `assets/` folder) and reference it here to display a preview on GitHub:
+
+![Security Report](securityreport.png)
+
+Note: The image will display on GitHub once `securityreport.png` is added and pushed to the repository. Alternatively, host the image in the repo and update the path above (for example `assets/securityreport.png`).
+
+### Security & Permissions
+The CLI needs permission to list/watch RBAC, Pods, Deployments, Secrets, and (optionally) read Trivy CRDs. For full visibility you will typically need elevated privileges (e.g., cluster-admin). Use caution when running in production clusters.

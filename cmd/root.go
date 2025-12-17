@@ -134,7 +134,7 @@ var displayRiskLevelsCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error creating RBAC role list: %v\n", err)
 			os.Exit(1)
 		}
-		var functions []riskposture.Function
+		var signals []riskposture.Signal
 		for i, role := range roles {
 			// Get the flagged permissions for the current role
 			flaggedPermissions := allFlaggedPermissions[i]
@@ -160,14 +160,14 @@ var displayRiskLevelsCmd = &cobra.Command{
 				}
 			}
 
-			roleFunctions := entity.ConvertRoleToFunction(role, entityPolicyRules)
-			functions = append(functions, roleFunctions...)
+			roleFunctions := entity.ConvertRoleToSignals(role, entityPolicyRules)
+			signals = append(signals, roleFunctions...)
 		}
 		// Create a new RiskPosture with the functions
-		riskPostureInstance := riskposture.NewRiskPosture(functions)
+		riskPostureInstance := riskposture.NewRiskPosture(signals)
 
 		// Display the risk levels
-		riskPostureInstance.DisplayRiskLevels()
+		riskPostureInstance.DeriveAttackPaths()
 	},
 }
 
@@ -212,9 +212,4 @@ func init() {
 	rootCmd.AddCommand(displayRiskLevelsCmd)
 	rootCmd.AddCommand(rbacCmd)
 	rootCmd.AddCommand(reportCmd)
-	// Here you will define your flags and configuration settings.
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// rootCmd.PersistentFlags().String("foo", "", "A help for foo")
-
 }

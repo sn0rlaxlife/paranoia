@@ -26,3 +26,9 @@ rbac.yaml
 
 # Docker documents - for jobs related to batch
 Dockerfile
+
+# Kubernetes manifests - for jobs related to batch
+kind.kubeconfig
+
+# Saved report files
+security-report.html*

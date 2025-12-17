@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{.Title}}</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#0f1b2e;
+      --panel2:#101f35;
+      --border:rgba(255,255,255,.08);
+      --text:#e5e7eb;
+      --muted:#9aa4b2;
+
+      --critical:#ef4444;
+      --high:#f59e0b;
+      --medium:#a855f7;
+      --low:#22c55e;
+      --info:#38bdf8;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 800px at 20% 0%, rgba(56,189,248,.10), transparent 60%),
+                  radial-gradient(900px 700px at 80% 10%, rgba(168,85,247,.10), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+    }
+
+    .shell{
+      display:grid;
+      grid-template-columns: 260px 1fr;
+      min-height:100vh;
+    }
+
+    .sidebar{
+      border-right:1px solid var(--border);
+      padding:18px 16px;
+      background: rgba(15,27,46,.55);
+      backdrop-filter: blur(8px);
+    }
+    .brand{
+      display:flex; gap:10px; align-items:center; margin-bottom:18px;
+    }
+    .logo{
+      width:34px;height:34px;border-radius:10px;
+      background: linear-gradient(135deg, rgba(56,189,248,.9), rgba(168,85,247,.9));
+      box-shadow: 0 8px 30px rgba(0,0,0,.35);
+    }
+    .brand h1{font-size:14px;margin:0;letter-spacing:.5px}
+    .nav{
+      margin-top:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .nav .pill{
+      padding:10px 12px;
+      border:1px solid var(--border);
+      background: rgba(16,31,53,.55);
+      border-radius:14px;
+    }
+
+    .main{
+      padding:18px 18px 28px;
+    }
+    header{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:12px;
+      margin-bottom:14px;
+    }
+    header .title h2{margin:0;font-size:18px}
+    header .title p{margin:6px 0 0;color:var(--muted);font-size:12px}
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:14px;
+    }
+
+    .card{
+      border:1px solid var(--border);
+      background: rgba(16,31,53,.55);
+      border-radius:18px;
+      padding:14px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.25);
+      backdrop-filter: blur(10px);
+    }
+
+    .stats{
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap:10px;
+      margin-top:10px;
+    }
+    .stat{
+      padding:10px;
+      border:1px solid var(--border);
+      border-radius:16px;
+      background: rgba(15,27,46,.55);
+    }
+    .stat .k{font-size:11px;color:var(--muted);margin-bottom:6px}
+    .stat .v{font-size:18px;font-weight:700}
+
+    .donut-wrap{
+      display:flex;
+      gap:14px;
+      align-items:center;
+    }
+    .donut{
+      width:150px;height:150px;border-radius:50%;
+      border:1px solid var(--border);
+      /* conic gradient segments: critical, high, medium, low, info */
+      background:
+        conic-gradient(
+          var(--critical) 0 {{pct (index .Counts "CRITICAL") .Total}}%,
+          var(--high) 0 {{pct (index .Counts "HIGH") .Total}}%,
+          var(--medium) 0 {{pct (index .Counts "MEDIUM") .Total}}%,
+          var(--low) 0 {{pct (index .Counts "LOW") .Total}}%,
+          var(--info) 0 100%
+        );
+      position:relative;
+      box-shadow: inset 0 0 0 10px rgba(0,0,0,.15);
+    }
+    .donut:after{
+      content:"";
+      position:absolute; inset:18px;
+      border-radius:50%;
+      background: rgba(11,18,32,.95);
+      border:1px solid var(--border);
+    }
+    .donut-center{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      z-index:2;
+      text-align:center;
+    }
+    .donut-center .big{font-size:26px;font-weight:800}
+    .donut-center .small{font-size:11px;color:var(--muted)}
+
+    .legend{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .legend .row{display:flex;align-items:center;gap:8px}
+    .dot{width:10px;height:10px;border-radius:50%}
+    /* ---- Risk posture donut + sections ---- */
+    .risk-wrap{
+      display:flex;
+      gap:14px;
+      align-items:center;
+      margin-top:12px;
+    }
+
+    .risk-donut{
+      width:150px;height:150px;border-radius:50%;
+      border:1px solid var(--border);
+      position:relative;
+      box-shadow: inset 0 0 0 10px rgba(0,0,0,.15);
+      background:
+        conic-gradient(
+          /* filled portion */
+          rgba(56,189,248,.95) 0 {{.RiskScore}}%,
+          /* remainder */
+          rgba(255,255,255,.10) 0 100%
+        );
+    }
+    .risk-donut:after{
+      content:"";
+      position:absolute; inset:18px;
+      border-radius:50%;
+      background: rgba(11,18,32,.95);
+      border:1px solid var(--border);
+    }
+
+    .risk-center{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      z-index:2;
+      text-align:center;
+    }
+    .risk-center .big{font-size:26px;font-weight:800}
+    .risk-center .small{font-size:11px;color:var(--muted)}
+    .risk-center .chip{
+      margin-top:6px;
+      font-size:10px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      color:var(--muted);
+      background: rgba(16,31,53,.55);
+    }
+
+    .stack{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      flex:1;
+    }
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .item{
+      border:1px solid var(--border);
+      background: rgba(15,27,46,.55);
+      border-radius:14px;
+      padding:10px 12px;
+    }
+
+    .item .h{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+      font-weight:700;
+      font-size:13px;
+    }
+    .item .p{
+      margin-top:6px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.45;
+    }
+
+    .kv{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:8px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .pill-mini{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(16,31,53,.55);
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    details.fix{
+      border:1px solid var(--border);
+      background: rgba(15,27,46,.55);
+      border-radius:14px;
+      padding:10px 12px;
+    }
+    details.fix summary{
+      cursor:pointer;
+      list-style:none;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      font-weight:700;
+      font-size:13px;
+    }
+    details.fix summary::-webkit-details-marker{display:none}
+    pre.yaml{
+      margin:10px 0 0;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background: rgba(11,18,32,.75);
+      overflow:auto;
+      font-size:12px;
+      line-height:1.4;
+    }
+    .table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0 10px;
+      margin-top:10px;
+      font-size:13px;
+    }
+    .table tr{
+      background: rgba(15,27,46,.55);
+      border:1px solid var(--border);
+    }
+    .table td{
+      padding:12px 12px;
+      border-top:1px solid var(--border);
+      border-bottom:1px solid var(--border);
+    }
+    .table td:first-child{
+      border-left:1px solid var(--border);
+      border-top-left-radius:14px;
+      border-bottom-left-radius:14px;
+      width:130px;
+    }
+    .table td:last-child{
+      border-right:1px solid var(--border);
+      border-top-right-radius:14px;
+      border-bottom-right-radius:14px;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      font-weight:700;
+      font-size:11px;
+      letter-spacing:.3px;
+      text-transform:uppercase;
+    }
+    .badge:before{
+      content:"";
+      width:8px;height:8px;border-radius:50%;
+      display:inline-block;
+    }
+    .badge.critical{color:#fecaca}
+    .badge.critical:before{background:var(--critical)}
+    .badge.high{color:#fde68a}
+    .badge.high:before{background:var(--high)}
+    .badge.medium{color:#e9d5ff}
+    .badge.medium:before{background:var(--medium)}
+    .badge.low{color:#bbf7d0}
+    .badge.low:before{background:var(--low)}
+    .badge.info{color:#bae6fd}
+    .badge.info:before{background:var(--info)}
+
+    .muted{color:var(--muted)}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>PARANOIA</h1>
+          <div class="muted" style="font-size:12px;margin-top:2px;">K8s Security Report</div>
+        </div>
+      </div>
+
+      <div class="nav">
+        <div class="pill">Cluster Overview</div>
+        <div class="pill">Findings</div>
+        <div class="pill">Export</div>
+      </div>
+
+      <div style="margin-top:16px" class="muted">
+        <div style="font-size:12px;margin-bottom:6px;">Generated</div>
+        <div class="mono" style="font-size:12px;">{{.GeneratedAt}}</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header>
+        <div class="title">
+          <h2>{{.Title}}</h2>
+          <p>Summary + findings rendered from live cluster checks.</p>
+        </div>
+        <div class="muted mono" style="font-size:12px;">Total: {{.Total}}</div>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:700;">Findings Breakdown</div>
+            <div class="muted" style="font-size:12px;">severity distribution</div>
+          </div>
+
+          <div class="donut-wrap" style="margin-top:12px;">
+            <div class="donut">
+              <div class="donut-center">
+                <div class="big">{{.Total}}</div>
+                <div class="small">findings</div>
+              </div>
+            </div>
+
+            <div class="legend">
+              <div class="row"><span class="dot" style="background:var(--critical)"></span> CRITICAL: {{index .Counts "CRITICAL"}}</div>
+              <div class="row"><span class="dot" style="background:var(--high)"></span> HIGH: {{index .Counts "HIGH"}}</div>
+              <div class="row"><span class="dot" style="background:var(--medium)"></span> MEDIUM: {{index .Counts "MEDIUM"}}</div>
+              <div class="row"><span class="dot" style="background:var(--low)"></span> LOW: {{index .Counts "LOW"}}</div>
+              <div class="row"><span class="dot" style="background:var(--info)"></span> INFO: {{index .Counts "INFO"}}</div>
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><div class="k">CRITICAL</div><div class="v" style="color:var(--critical)">{{index .Counts "CRITICAL"}}</div></div>
+            <div class="stat"><div class="k">HIGH</div><div class="v" style="color:var(--high)">{{index .Counts "HIGH"}}</div></div>
+            <div class="stat"><div class="k">MEDIUM</div><div class="v" style="color:var(--medium)">{{index .Counts "MEDIUM"}}</div></div>
+            <div class="stat"><div class="k">LOW</div><div class="v" style="color:var(--low)">{{index .Counts "LOW"}}</div></div>
+            <div class="stat"><div class="k">INFO</div><div class="v" style="color:var(--info)">{{index .Counts "INFO"}}</div></div>
+          </div>
+        </section>
+
+       <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:700;">Risk Posture</div>
+        <div class="muted" style="font-size:12px;">derived from signals</div>
+      </div>
+
+      <div class="risk-wrap">
+        <div class="risk-donut">
+          <div class="risk-center">
+            <div class="big">{{.RiskScore}}</div>
+            <div class="small">/ 100</div>
+            <div class="chip">overall score</div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="kv">
+            <span class="pill-mini">Critical: <strong style="color:var(--critical)">{{.RiskCounts.Critical}}</strong></span>
+            <span class="pill-mini">High: <strong style="color:var(--high)">{{.RiskCounts.High}}</strong></span>
+            <span class="pill-mini">Medium: <strong style="color:var(--medium)">{{.RiskCounts.Medium}}</strong></span>
+            <span class="pill-mini">Low: <strong style="color:var(--low)">{{.RiskCounts.Low}}</strong></span>
+          </div>
+
+          <div class="item">
+            <div class="h">Top Drivers <span class="muted" style="font-weight:600;font-size:12px;">(top 5)</span></div>
+            <div class="p">
+              {{if .RiskDrivers}}
+                {{range $i, $d := .RiskDrivers}}
+                  {{if lt $i 5}}• {{$d}}<br/>{{end}}
+                {{end}}
+              {{else}}
+                No high-risk drivers detected.
+              {{end}}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="list" style="margin-top:12px;">
+        <div class="item">
+          <div class="h">Attack Paths</div>
+          <div class="p">
+            {{if .AttackPaths}}
+              {{range .AttackPaths}}
+                <span class="badge {{lower .Severity}}">{{.Severity}}</span>
+                <span class="mono"> {{.Title}}</span>
+                <span class="muted"> (confidence {{.Confidence}}%)</span>
+                <br/>
+              {{end}}
+            {{else}}
+              No attack paths detected.
+            {{end}}
+          </div>
+        </div>
+
+        <div class="item">
+          <div class="h">Recommended Fixes</div>
+          <div class="p muted" style="margin-top:0;">
+            {{if .Remediations}}
+              Expand to view YAML manifests.
+            {{else}}
+              No automated remediations generated yet.
+            {{end}}
+          </div>
+
+          {{if .Remediations}}
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px;">
+              {{range .Remediations}}
+                <details class="fix">
+                  <summary>
+                    <span>
+                      <span class="badge {{lower .Priority}}">{{.Priority}}</span>
+                      {{.Title}}
+                      <span class="muted" style="font-weight:600;font-size:12px;">— {{.AppliesTo}}</span>
+                    </span>
+                    <span class="muted" style="font-size:12px;">YAML</span>
+                  </summary>
+                  <pre class="yaml mono">{{.YAML}}</pre>
+                </details>
+              {{end}}
+            </div>
+          {{end}}
+        </div>
+      </div>
+    </section>
+      </div>
+            <!-- Category Breakdown Sections -->
+      {{if .RBACFindings}}
+      <section class="card" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:700;">🔐 RBAC Findings</div>
+          <div class="muted" style="font-size:12px;">{{len .RBACFindings}} issues</div>
+        </div>
+        <table class="table" role="table" aria-label="RBAC findings">
+          <tbody>
+          {{range .RBACFindings}}
+            <tr>
+              <td><span class="{{.BadgeCls}}">{{.Severity}}</span></td>
+              <td class="mono">{{.Raw}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </section>
+      {{end}}
+
+      {{if .DeploymentFindings}}
+      <section class="card" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:700;">🚀 Deployment Findings</div>
+          <div class="muted" style="font-size:12px;">{{len .DeploymentFindings}} issues</div>
+        </div>
+        <table class="table" role="table" aria-label="Deployment findings">
+          <tbody>
+          {{range .DeploymentFindings}}
+            <tr>
+              <td><span class="{{.BadgeCls}}">{{.Severity}}</span></td>
+              <td class="mono">{{.Raw}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </section>
+      {{end}}
+
+      {{if .ControlPlaneFindings}}
+      <section class="card" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:700;">⚙️ Control Plane Findings</div>
+          <div class="muted" style="font-size:12px;">{{len .ControlPlaneFindings}} issues</div>
+        </div>
+        <table class="table" role="table" aria-label="Control plane findings">
+          <tbody>
+          {{range .ControlPlaneFindings}}
+            <tr>
+              <td><span class="{{.BadgeCls}}">{{.Severity}}</span></td>
+              <td class="mono">{{.Raw}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </section>
+      {{end}}
+
+      {{if .PodFindings}}
+      <section class="card" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:700;">📦 Pod Security Findings</div>
+          <div class="muted" style="font-size:12px;">{{len .PodFindings}} issues</div>
+        </div>
+        <table class="table" role="table" aria-label="Pod findings">
+          <tbody>
+          {{range .PodFindings}}
+            <tr>
+              <td><span class="{{.BadgeCls}}">{{.Severity}}</span></td>
+              <td class="mono">{{.Raw}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </section>
+      {{end}}
+
+      {{if .SecretFindings}}
+      <section class="card" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:700;">🔑 Secret Security Findings</div>
+          <div class="muted" style="font-size:12px;">{{len .SecretFindings}} issues</div>
+        </div>
+        <table class="table" role="table" aria-label="Secret findings">
+          <tbody>
+          {{range .SecretFindings}}
+            <tr>
+              <td><span class="{{.BadgeCls}}">{{.Severity}}</span></td>
+              <td class="mono">{{.Raw}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </section>
+      {{end}}
+      <section class="card" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:700;">Findings</div>
+          <div class="muted" style="font-size:12px;">sorted by severity</div>
+        </div>
+
+        <table class="table" role="table" aria-label="Findings table">
+          <tbody>
+          {{range .Findings}}
+            <tr>
+              <td><span class="{{.BadgeCls}}">{{.Severity}}</span></td>
+              <td class="mono">{{.Raw}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

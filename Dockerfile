@@ -15,7 +15,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o paranoia .
 
 # Final stage using a minimal base image.
-FROM alpine:3.18.6
+FROM alpine:3.23.0
 
 # Create a non-root user.
 RUN adduser -D -g '' paranoia

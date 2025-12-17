@@ -53,38 +53,89 @@ type PolicyRule struct {
 	NonResourceURLs []string `json:"nonResourceURLs"`
 }
 
-func AnalyzeClusterRoles(clientset *kubernetes.Clientset, clusterRoleName string) error {
+func contains(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
 
+func AnalyzeClusterRoles(clientset *kubernetes.Clientset, clusterRoleName string) ([]string, []riskposture.Signal, error) {
 	rbacClient := clientset.RbacV1()
 
-	// Fetch cluster roles
-	clusterRole, err := rbacClient.ClusterRoles().Get(context.TODO(), clusterRoleName, metav1.GetOptions{})
+	cr, err := rbacClient.ClusterRoles().Get(context.TODO(), clusterRoleName, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to fetch cluster role: %v", err)
+		return nil, nil, fmt.Errorf("failed to fetch cluster role %q: %w", clusterRoleName, err)
 	}
 
-	// Analyze permissions
-	for _, rule := range clusterRole.Rules {
-		fmt.Println("Rule:", rule)
+	var findings []string
+	var signals []riskposture.Signal
 
-		// Resource Access
-		fmt.Printf("    -API Groups: %v\n", rule.APIGroups)
-		fmt.Printf("    -Resources: %v\n", rule.Resources)
-
-		// Verbs
-		fmt.Printf("    -Verbs: %v\n", rule.Verbs)
-
-		// Potential risks
+	for _, rule := range cr.Rules {
+		// --- Wildcard verbs ---
 		if HasWildcard(rule.Verbs) {
-			fmt.Println("   -Warning: Wildcard verbs detected ****highly privileged****")
+			findings = append(findings,
+				fmt.Sprintf("[HIGH] ClusterRole/%s: wildcard verbs '*' detected (highly privileged)", cr.Name),
+			)
+			signals = append(signals, riskposture.Signal{
+				Name:     "WildcardRBAC",
+				Severity: "HIGH",
+				Weight:   25,
+			})
 		}
+
+		// --- Dangerous verbs ---
 		if HasDangerousVerbs(rule.Verbs) {
-			fmt.Println("   -Warning: Dangerous verbs detected ****highly privileged****")
+			findings = append(findings,
+				fmt.Sprintf("[MEDIUM] ClusterRole/%s: dangerous verbs detected (%v)", cr.Name, rule.Verbs),
+			)
+			signals = append(signals, riskposture.Signal{
+				Name:     "DangerousRBACVerbs",
+				Severity: "MEDIUM",
+				Weight:   15,
+			})
+		}
+
+		// --- Wildcard resources ---
+		if HasWildcard(rule.Resources) {
+			findings = append(findings,
+				fmt.Sprintf("[HIGH] ClusterRole/%s: wildcard resources '*' detected", cr.Name),
+			)
+			signals = append(signals, riskposture.Signal{
+				Name:     "WildcardRBACResources",
+				Severity: "HIGH",
+				Weight:   25,
+			})
+		}
+
+		// --- Secrets access ---
+		if contains(rule.Resources, "secrets") && (contains(rule.Verbs, "get") || contains(rule.Verbs, "list") || contains(rule.Verbs, "watch")) {
+			findings = append(findings,
+				fmt.Sprintf("[HIGH] ClusterRole/%s: read access to secrets detected (verbs=%v)", cr.Name, rule.Verbs),
+			)
+			signals = append(signals, riskposture.Signal{
+				Name:     "SecretsAccess",
+				Severity: "HIGH",
+				Weight:   20,
+			})
+		}
+
+		// --- Impersonate / escalation-ish verbs (nice add) ---
+		if contains(rule.Verbs, "impersonate") || contains(rule.Verbs, "bind") || contains(rule.Verbs, "escalate") {
+			findings = append(findings,
+				fmt.Sprintf("[HIGH] ClusterRole/%s: escalation verbs detected (impersonate/bind/escalate)", cr.Name),
+			)
+			signals = append(signals, riskposture.Signal{
+				Name:     "RBACEscalationVerbs",
+				Severity: "HIGH",
+				Weight:   25,
+			})
 		}
 	}
 
-	return nil
-
+	return findings, signals, nil
 }
 
 func HasWildcard(verbs []string) bool {
@@ -97,12 +148,13 @@ func HasWildcard(verbs []string) bool {
 }
 
 func HasDangerousVerbs(verbs []string) bool {
-	dangerousVerbs := []string{"create", "delete", "update", "patch", "bind"}
-	for _, verb := range verbs {
-		for _, dangerousVerb := range dangerousVerbs {
-			if verb == dangerousVerb {
-				return true
-			}
+	dangerous := map[string]struct{}{
+		"create": {}, "delete": {}, "update": {}, "patch": {},
+		"bind": {}, "escalate": {}, "impersonate": {},
+	}
+	for _, v := range verbs {
+		if _, ok := dangerous[v]; ok {
+			return true
 		}
 	}
 	return false
@@ -243,31 +295,68 @@ func ExtractPermissionsAndResources(rule PolicyRule) ([]string, []string, []stri
 	return permissions, resources, flaggedPermissions, nil
 }
 
-func ConvertRoleToFunction(role RBACRoleList, roleList [][]PolicyRule) []riskposture.Function {
-	var functionscalc []riskposture.Function
-	// Extract the permissions from the role
+func ConvertRoleToSignals(
+	role RBACRoleList,
+	roleList [][]PolicyRule,
+) []riskposture.Signal {
 
-	//loop over outer slice to access RBAC Roles Listings
-	for _, roles := range roleList {
-		// loop over inner slice to access individual roles
-		for _, r := range roles {
-			permissions, resources, flaggedPermissions, err := ExtractPermissionsAndResources(r)
+	var signals []riskposture.Signal
+
+	for _, rules := range roleList {
+		for _, r := range rules {
+			perms, resources, flagged, err := ExtractPermissionsAndResources(r)
 			if err != nil {
-				log.Printf("Error extracting permissions and resources: %v", err)
+				log.Printf("RBAC extract error: %v", err)
 				continue
 			}
 
-			fmt.Println(resources, flaggedPermissions, permissions)
-			// Calculate the risk level as the number of permissions
-			riskLevel := len(permissions)
-
-			function := riskposture.Function{
-				Name:      role.Name,
-				RiskLevel: riskLevel,
+			// --- CRITICAL: cluster-admin equivalent ---
+			if role.Name == "cluster-admin" {
+				signals = append(signals, riskposture.Signal{
+					Name:     "ClusterAdminBinding",
+					Severity: "CRITICAL",
+					Weight:   40,
+				})
+				continue
 			}
-			functionscalc = append(functionscalc, function)
+
+			// --- HIGH: wildcard RBAC ---
+			if HasWildcard(perms) || HasWildcard(resources) {
+				signals = append(signals, riskposture.Signal{
+					Name:     "WildcardRBAC",
+					Severity: "HIGH",
+					Weight:   25,
+				})
+			}
+
+			// --- HIGH: secrets access ---
+			if contains(resources, "secrets") {
+				signals = append(signals, riskposture.Signal{
+					Name:     "SecretsAccess",
+					Severity: "HIGH",
+					Weight:   20,
+				})
+			}
+
+			// --- MEDIUM: exec / port-forward ---
+			if contains(perms, "pods/exec") || contains(perms, "pods/portforward") {
+				signals = append(signals, riskposture.Signal{
+					Name:     "PodExecAccess",
+					Severity: "MEDIUM",
+					Weight:   15,
+				})
+			}
+
+			// --- INFO: noisy RBAC ---
+			if len(flagged) > 0 {
+				signals = append(signals, riskposture.Signal{
+					Name:     "SuspiciousRBACPattern",
+					Severity: "INFO",
+					Weight:   5,
+				})
+			}
 		}
 	}
-	// Return the slice of functions
-	return functionscalc
+
+	return signals
 }
