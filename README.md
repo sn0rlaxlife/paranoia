@@ -96,12 +96,9 @@ make build
 ```
 
 ### HTML Report Image Preview
-If you have a generated security report image, place it at the repository root (or in an `assets/` folder) and reference it here to display a preview on GitHub:
-
 ![Security Report](securityreport.png)
 <img src="https://github.com/sn0rlaxlife/paranoia/blob/main/securityreport.png" alt="Paranoia" width="600" height="600">
 
-Note: The image will display on GitHub once `securityreport.png` is added and pushed to the repository. Alternatively, host the image in the repo and update the path above (for example `assets/securityreport.png`).
 
 ### Security & Permissions
 The CLI needs permission to list/watch RBAC, Pods, Deployments, Secrets, and (optionally) read Trivy CRDs. For full visibility you will typically need elevated privileges (e.g., cluster-admin). Use caution when running in production clusters.
